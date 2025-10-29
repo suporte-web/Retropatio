@@ -448,6 +448,35 @@ export function registerRoutes(app: Express): Server {
       // Broadcast to WebSocket clients
       broadcastToClients({ type: "visitante_novo", data: visitante });
       
+      // Create notification for gestores of this filial if visitor is awaiting approval
+      if (visitante.status === "aguardando") {
+        // Get all users and filter for active gestores
+        const allUsers = await storage.getAllUsers();
+        const gestores = allUsers.filter(u => u.role === "gestor" && u.ativo);
+        
+        // Create notification only for gestores with permission in this filial
+        for (const gestor of gestores) {
+          const gestorFilialIds = await storage.getUserFilialIds(gestor.id);
+          
+          // Only notify if gestor has access to this filial
+          if (gestorFilialIds.includes(filialId)) {
+            await storage.createNotification({
+              userId: gestor.id,
+              filialId: filialId,
+              tipo: "visitante_aprovacao",
+              titulo: "Novo visitante aguardando aprovação",
+              mensagem: `${visitante.nome} (${visitante.tipoVisita}) aguarda aprovação para entrada.`,
+              status: "nao_lida",
+              entidadeId: visitante.id,
+              entidadeTipo: "visitante",
+              actionUrl: `/visitantes`,
+            });
+            // Note: Notification not broadcasted via WebSocket for security.
+            // Frontend will poll /api/notifications/unread-count periodically.
+          }
+        }
+      }
+      
       res.status(201).json(visitante);
     } catch (error) {
       next(error);
