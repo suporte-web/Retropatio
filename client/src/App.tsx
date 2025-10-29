@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
+import { useWebSocket } from "@/hooks/use-websocket";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
 import NotFound from "@/pages/not-found";
@@ -25,6 +26,9 @@ import { Loader2 } from "lucide-react";
 
 function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
+  
+  // Initialize WebSocket connection for real-time updates
+  useWebSocket();
   
   if (isLoading) {
     return (
