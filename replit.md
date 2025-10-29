@@ -85,6 +85,24 @@ Sistema web completo para controle de entrada e saída de veículos e visitantes
   - Dados antes e depois (JSON)
   - IP e User Agent
 
+### Sistema de Notificações
+- Notificações em tempo real para gestores
+- Polling automático a cada 10 segundos
+- Badge com contador de não lidas no header
+- Dropdown com lista de notificações
+- Tipos de notificação:
+  - `visitante_aprovacao`: Novo visitante aguardando aprovação
+  - (Extensível para outros tipos no futuro)
+- Segurança:
+  - Isolamento por filial: apenas gestores com permissão na filial recebem notificações
+  - Ownership verification: usuários só podem acessar suas próprias notificações
+  - Autenticação via Bearer token
+- Interações:
+  - Clicar na notificação marca como lida e redireciona para ação relevante
+  - Botão para marcar todas como lidas
+  - Deletar notificações individualmente
+- Status: Lida/Não lida
+
 ## WebSocket - Real-time
 
 ### Eventos Broadcast
@@ -154,6 +172,13 @@ const socket = new WebSocket(wsUrl);
 ### Auditoria
 - `GET /api/audit-logs` - Todos os logs de auditoria (últimos 1000)
 
+### Notificações
+- `GET /api/notifications` - Listar notificações do usuário
+- `GET /api/notifications/unread-count` - Contador de não lidas
+- `PATCH /api/notifications/:id/read` - Marcar como lida
+- `PATCH /api/notifications/mark-all-read` - Marcar todas como lidas
+- `DELETE /api/notifications/:id` - Deletar notificação
+
 ## Credenciais de Teste
 
 ```
@@ -186,6 +211,7 @@ Cliente:
 - `chamadas` - Chamadas de motorista
 - `checklists` - Checklists digitais por veículo
 - `checklist_items` - Itens de checklist com suporte a fotos
+- `notifications` - Notificações para gestores
 - `audit_logs` - Logs de auditoria
 
 ## Segurança
@@ -259,6 +285,23 @@ npm run build
 - Métrica de tempo médio de permanência (calculado em horas com precisão de frações)
 - Design responsivo com Recharts
 
+### Sistema de Notificações (Completo)
+- Backend completo com schema PostgreSQL
+- Componente NotificationCenter com ícone de sino no header
+- Polling automático a cada 10 segundos
+- Badge com contador de notificações não lidas
+- Dropdown com lista de notificações formatadas
+- Notificações criadas automaticamente quando:
+  - Porteiro cadastra visitante aguardando aprovação (apenas gestores da filial recebem)
+- Interações:
+  - Clicar na notificação marca como lida e redireciona
+  - Botão para marcar todas como lidas
+  - Deletar notificações individualmente
+- Segurança:
+  - Isolamento por filial (multi-tenant)
+  - Ownership checks em todas as rotas
+  - Autenticação via Bearer token
+
 ### Sistema de Checklist Digital (Em Desenvolvimento)
 - Schema de banco de dados criado:
   - Tabela `checklists`: gerencia checklists por veículo
@@ -271,7 +314,7 @@ npm run build
 
 1. Interface de criação e preenchimento de checklists
 2. Upload de fotos para itens do checklist
-3. Sistema de notificações internas (toasts + persistentes)
+3. Expandir tipos de notificações (veículos, chamadas, alertas)
 4. Integração com ERP externo
 5. Leitura automática de placas (LPR) com câmeras
 6. Notificações por email e SMS (Twilio)
@@ -319,6 +362,7 @@ npm run build
 ✅ Responsivo
 ✅ Exportação CSV e PDF
 ✅ Dashboard analítico com gráficos (Recharts)
+✅ Sistema de notificações com polling
 🚧 Sistema de checklist digital (schema criado, interface em desenvolvimento)
 
 ## Contato e Suporte
