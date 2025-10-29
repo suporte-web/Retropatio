@@ -2,7 +2,11 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Bell, Loader2, Check } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Bell, Loader2, Check, Plus } from "lucide-react";
 import { StatusBadge } from "@/components/status-badge";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -14,6 +18,11 @@ import { Badge } from "@/components/ui/badge";
 export default function ChamadasPage() {
   const { toast } = useToast();
   const filialId = localStorage.getItem("selected_filial");
+  const [showNewDialog, setShowNewDialog] = useState(false);
+  const [formData, setFormData] = useState({
+    veiculoId: "",
+    motivo: "",
+  });
 
   const { data: chamadas, isLoading } = useQuery<Chamada[]>({
     queryKey: ["/api/chamadas", filialId],
@@ -23,6 +32,32 @@ export default function ChamadasPage() {
   const { data: veiculos } = useQuery<Veiculo[]>({
     queryKey: ["/api/veiculos", filialId],
     enabled: !!filialId,
+  });
+
+  const createChamadaMutation = useMutation({
+    mutationFn: async (data: typeof formData) => {
+      const res = await apiRequest("POST", "/api/chamadas", {
+        ...data,
+        filialId,
+      });
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/chamadas"] });
+      toast({
+        title: "Chamada criada",
+        description: "Motorista será notificado",
+      });
+      setFormData({ veiculoId: "", motivo: "" });
+      setShowNewDialog(false);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Erro ao criar chamada",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
   });
 
   const atenderChamadaMutation = useMutation({
@@ -45,6 +80,7 @@ export default function ChamadasPage() {
 
   const chamadasPendentes = chamadas?.filter((c) => c.status === "pendente");
   const chamadasAtendidas = chamadas?.filter((c) => c.status === "atendida");
+  const veiculosAtivos = veiculos?.filter((v) => v.situacao !== "finalizado");
 
   if (isLoading) {
     return (
@@ -57,9 +93,82 @@ export default function ChamadasPage() {
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">Chamadas de Motorista</h1>
-        <p className="text-muted-foreground">Gerencie as notificações e chamadas dos motoristas</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Chamadas de Motorista</h1>
+          <p className="text-muted-foreground">Gerencie as notificações e chamadas dos motoristas</p>
+        </div>
+        <Dialog open={showNewDialog} onOpenChange={setShowNewDialog}>
+          <DialogTrigger asChild>
+            <Button data-testid="button-nova-chamada">
+              <Plus className="mr-2 h-4 w-4" />
+              Nova Chamada
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Criar Nova Chamada</DialogTitle>
+              <DialogDescription>
+                Solicite um motorista para atendimento
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="veiculo">Veículo *</Label>
+                <Select
+                  value={formData.veiculoId}
+                  onValueChange={(value) => setFormData({ ...formData, veiculoId: value })}
+                >
+                  <SelectTrigger id="veiculo" data-testid="select-veiculo">
+                    <SelectValue placeholder="Selecione o veículo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {veiculosAtivos?.map((veiculo) => (
+                      <SelectItem key={veiculo.id} value={veiculo.id}>
+                        {veiculo.placaCavalo} - {veiculo.motorista}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="motivo">Motivo *</Label>
+                <Input
+                  id="motivo"
+                  data-testid="input-motivo"
+                  placeholder="Ex: Movimentar veículo para doca 5"
+                  value={formData.motivo}
+                  onChange={(e) => setFormData({ ...formData, motivo: e.target.value })}
+                />
+              </div>
+              <div className="flex gap-2 justify-end">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowNewDialog(false);
+                    setFormData({ veiculoId: "", motivo: "" });
+                  }}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={() => createChamadaMutation.mutate(formData)}
+                  disabled={!formData.veiculoId || !formData.motivo || createChamadaMutation.isPending}
+                  data-testid="button-criar-chamada"
+                >
+                  {createChamadaMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Criando...
+                    </>
+                  ) : (
+                    "Criar Chamada"
+                  )}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Stats */}
