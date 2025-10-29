@@ -9,6 +9,7 @@ import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { useWebSocket } from "@/hooks/use-websocket";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { NotificationCenter } from "@/components/notification-center";
 import NotFound from "@/pages/not-found";
 import AuthPage from "@/pages/auth-page";
 import FilialSelectionPage from "@/pages/filial-selection-page";
@@ -55,6 +56,7 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
           <header className="flex items-center justify-between gap-2 border-b border-border px-4 h-16 flex-shrink-0">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
             <div className="flex items-center gap-2">
+              <NotificationCenter />
               <ThemeToggle />
             </div>
           </header>
