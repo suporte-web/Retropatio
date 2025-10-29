@@ -9,6 +9,7 @@ import {
   chamadas,
   auditLogs,
   refreshTokens,
+  notifications,
   type User,
   type InsertUser,
   type Filial,
@@ -27,6 +28,8 @@ import {
   type InsertAuditLog,
   type RefreshToken,
   type InsertRefreshToken,
+  type Notification,
+  type InsertNotification,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, gte, lt } from "drizzle-orm";
@@ -86,6 +89,16 @@ export interface IStorage {
   getChamadasByFilial(filialId: string): Promise<Chamada[]>;
   createChamada(chamada: InsertChamada): Promise<Chamada>;
   updateChamada(id: string, data: Partial<Chamada>): Promise<Chamada>;
+
+  // Notification methods
+  getNotification(id: string): Promise<Notification | undefined>;
+  getNotificationsByUser(userId: string): Promise<Notification[]>;
+  getUnreadNotificationsByUser(userId: string): Promise<Notification[]>;
+  getUnreadCountByUser(userId: string): Promise<number>;
+  createNotification(notification: InsertNotification): Promise<Notification>;
+  markAsRead(id: string): Promise<Notification>;
+  markAllAsRead(userId: string): Promise<void>;
+  deleteNotification(id: string): Promise<void>;
 
   // Audit Log methods
   createAuditLog(log: InsertAuditLog): Promise<AuditLog>;
@@ -327,6 +340,63 @@ export class DatabaseStorage implements IStorage {
       .where(eq(chamadas.id, id))
       .returning();
     return c;
+  }
+
+  // Notification methods
+  async getNotification(id: string): Promise<Notification | undefined> {
+    const [notification] = await db.select().from(notifications).where(eq(notifications.id, id));
+    return notification || undefined;
+  }
+
+  async getNotificationsByUser(userId: string): Promise<Notification[]> {
+    return await db.select().from(notifications)
+      .where(eq(notifications.userId, userId))
+      .orderBy(desc(notifications.createdAt))
+      .limit(50);
+  }
+
+  async getUnreadNotificationsByUser(userId: string): Promise<Notification[]> {
+    return await db.select().from(notifications)
+      .where(and(
+        eq(notifications.userId, userId),
+        eq(notifications.status, "nao_lida")
+      ))
+      .orderBy(desc(notifications.createdAt));
+  }
+
+  async getUnreadCountByUser(userId: string): Promise<number> {
+    const results = await db.select().from(notifications)
+      .where(and(
+        eq(notifications.userId, userId),
+        eq(notifications.status, "nao_lida")
+      ));
+    return results.length;
+  }
+
+  async createNotification(notification: InsertNotification): Promise<Notification> {
+    const [n] = await db.insert(notifications).values(notification).returning();
+    return n;
+  }
+
+  async markAsRead(id: string): Promise<Notification> {
+    const [n] = await db.update(notifications)
+      .set({ status: "lida", readAt: new Date() })
+      .where(eq(notifications.id, id))
+      .returning();
+    return n;
+  }
+
+  async markAllAsRead(userId: string): Promise<void> {
+    await db.update(notifications)
+      .set({ status: "lida", readAt: new Date() })
+      .where(and(
+        eq(notifications.userId, userId),
+        eq(notifications.status, "nao_lida")
+      ));
+  }
+
+  async deleteNotification(id: string): Promise<void> {
+    await db.delete(notifications).where(eq(notifications.id, id));
   }
 
   // Audit Log methods

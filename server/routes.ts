@@ -567,6 +567,85 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // ==================== Notifications Routes ====================
+  
+  // Get all notifications for current user
+  app.get("/api/notifications", requireAuth, async (req, res, next) => {
+    try {
+      const user = (req as any).user as User;
+      const notifications = await storage.getNotificationsByUser(user.id);
+      res.json(notifications);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Get unread notifications count
+  app.get("/api/notifications/unread-count", requireAuth, async (req, res, next) => {
+    try {
+      const user = (req as any).user as User;
+      const count = await storage.getUnreadCountByUser(user.id);
+      res.json({ count });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Mark notification as read
+  app.patch("/api/notifications/:id/read", requireAuth, async (req, res, next) => {
+    try {
+      const user = (req as any).user as User;
+      const { id } = req.params;
+      
+      // Verify ownership
+      const notification = await storage.getNotification(id);
+      if (!notification) {
+        return res.status(404).json({ error: "Notificação não encontrada" });
+      }
+      if (notification.userId !== user.id) {
+        return res.status(403).json({ error: "Você não tem permissão para acessar esta notificação" });
+      }
+      
+      const updated = await storage.markAsRead(id);
+      res.json(updated);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Mark all notifications as read
+  app.patch("/api/notifications/read-all", requireAuth, async (req, res, next) => {
+    try {
+      const user = (req as any).user as User;
+      await storage.markAllAsRead(user.id);
+      res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Delete notification
+  app.delete("/api/notifications/:id", requireAuth, async (req, res, next) => {
+    try {
+      const user = (req as any).user as User;
+      const { id } = req.params;
+      
+      // Verify ownership
+      const notification = await storage.getNotification(id);
+      if (!notification) {
+        return res.status(404).json({ error: "Notificação não encontrada" });
+      }
+      if (notification.userId !== user.id) {
+        return res.status(403).json({ error: "Você não tem permissão para deletar esta notificação" });
+      }
+      
+      await storage.deleteNotification(id);
+      res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   // ==================== Audit Logs Routes ====================
   
   app.get("/api/audit-logs", requireAuth, requireRole("gestor"), async (req, res, next) => {
