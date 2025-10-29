@@ -5,21 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Truck, Loader2 } from "lucide-react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function AuthPage() {
-  const { user, loginMutation, registerMutation } = useAuth();
+  const { user, loginMutation } = useAuth();
   const [, setLocation] = useLocation();
   const [loginForm, setLoginForm] = useState({ username: "", password: "" });
-  const [registerForm, setRegisterForm] = useState({
-    username: "",
-    email: "",
-    password: "",
-    nome: "",
-    role: "porteiro" as "porteiro" | "cliente" | "gestor",
-  });
 
   useEffect(() => {
     if (user) {
@@ -32,18 +23,13 @@ export default function AuthPage() {
     loginMutation.mutate(loginForm);
   };
 
-  const handleRegister = (e: React.FormEvent) => {
-    e.preventDefault();
-    registerMutation.mutate(registerForm);
-  };
-
   if (user) {
     return null;
   }
 
   return (
     <div className="min-h-screen flex">
-      {/* Left side - Forms */}
+      {/* Left side - Login Form */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-background">
         <div className="w-full max-w-md space-y-6">
           <div className="flex flex-col items-center gap-2 text-center">
@@ -54,160 +40,57 @@ export default function AuthPage() {
             <p className="text-sm text-muted-foreground">Sistema de Controle de Pátio e Portaria</p>
           </div>
 
-          <Tabs defaultValue="login" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="login" data-testid="tab-login">Login</TabsTrigger>
-              <TabsTrigger value="register" data-testid="tab-register">Cadastro</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="login">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Acesse sua conta</CardTitle>
-                  <CardDescription>
-                    Entre com suas credenciais para acessar o sistema
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <form onSubmit={handleLogin} className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="login-username">Usuário</Label>
-                      <Input
-                        id="login-username"
-                        data-testid="input-login-username"
-                        type="text"
-                        placeholder="seu.usuario"
-                        value={loginForm.username}
-                        onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })}
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="login-password">Senha</Label>
-                      <Input
-                        id="login-password"
-                        data-testid="input-login-password"
-                        type="password"
-                        placeholder="••••••••"
-                        value={loginForm.password}
-                        onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
-                        required
-                      />
-                    </div>
-                    <Button
-                      type="submit"
-                      className="w-full"
-                      disabled={loginMutation.isPending}
-                      data-testid="button-login"
-                    >
-                      {loginMutation.isPending ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Entrando...
-                        </>
-                      ) : (
-                        "Entrar"
-                      )}
-                    </Button>
-                  </form>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="register">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Criar nova conta</CardTitle>
-                  <CardDescription>
-                    Preencha os dados para criar uma conta no sistema
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <form onSubmit={handleRegister} className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="register-nome">Nome Completo *</Label>
-                      <Input
-                        id="register-nome"
-                        data-testid="input-register-nome"
-                        type="text"
-                        placeholder="João Silva"
-                        value={registerForm.nome}
-                        onChange={(e) => setRegisterForm({ ...registerForm, nome: e.target.value })}
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="register-email">E-mail *</Label>
-                      <Input
-                        id="register-email"
-                        data-testid="input-register-email"
-                        type="email"
-                        placeholder="joao@empresa.com"
-                        value={registerForm.email}
-                        onChange={(e) => setRegisterForm({ ...registerForm, email: e.target.value })}
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="register-username">Usuário *</Label>
-                      <Input
-                        id="register-username"
-                        data-testid="input-register-username"
-                        type="text"
-                        placeholder="joao.silva"
-                        value={registerForm.username}
-                        onChange={(e) => setRegisterForm({ ...registerForm, username: e.target.value })}
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="register-password">Senha *</Label>
-                      <Input
-                        id="register-password"
-                        data-testid="input-register-password"
-                        type="password"
-                        placeholder="••••••••"
-                        value={registerForm.password}
-                        onChange={(e) => setRegisterForm({ ...registerForm, password: e.target.value })}
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="register-role">Perfil *</Label>
-                      <Select
-                        value={registerForm.role}
-                        onValueChange={(value) => setRegisterForm({ ...registerForm, role: value as typeof registerForm.role })}
-                      >
-                        <SelectTrigger id="register-role" data-testid="select-register-role">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="porteiro">Porteiro</SelectItem>
-                          <SelectItem value="cliente">Cliente</SelectItem>
-                          <SelectItem value="gestor">Gestor</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <Button
-                      type="submit"
-                      className="w-full"
-                      disabled={registerMutation.isPending}
-                      data-testid="button-register"
-                    >
-                      {registerMutation.isPending ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Criando conta...
-                        </>
-                      ) : (
-                        "Criar conta"
-                      )}
-                    </Button>
-                  </form>
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
+          <Card>
+            <CardHeader>
+              <CardTitle>Acesse sua conta</CardTitle>
+              <CardDescription>
+                Entre com suas credenciais para acessar o sistema
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="login-username">Usuário</Label>
+                  <Input
+                    id="login-username"
+                    data-testid="input-login-username"
+                    type="text"
+                    placeholder="seu.usuario"
+                    value={loginForm.username}
+                    onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="login-password">Senha</Label>
+                  <Input
+                    id="login-password"
+                    data-testid="input-login-password"
+                    type="password"
+                    placeholder="••••••••"
+                    value={loginForm.password}
+                    onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
+                    required
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={loginMutation.isPending}
+                  data-testid="button-login"
+                >
+                  {loginMutation.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Entrando...
+                    </>
+                  ) : (
+                    "Entrar"
+                  )}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
         </div>
       </div>
 

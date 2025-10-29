@@ -108,13 +108,14 @@ const socket = new WebSocket(wsUrl);
 ## Endpoints da API
 
 ### Autenticação
-- `POST /api/register` - Criar nova conta (retorna accessToken + refreshToken)
 - `POST /api/login` - Fazer login (retorna accessToken + refreshToken)
 - `POST /api/refresh` - Renovar access token usando refresh token
 - `POST /api/logout` - Fazer logout (invalida refresh token)
 - `GET /api/user` - Obter usuário atual (requer Bearer token)
 
 **Autenticação**: Todas as rotas protegidas requerem header `Authorization: Bearer <accessToken>`
+
+**IMPORTANTE**: Rota de registro público (`POST /api/register`) foi desabilitada. Apenas gestores podem criar novos usuários através da rota `POST /api/users` (requer autenticação e role "gestor").
 
 ### Usuários
 - `GET /api/users` - Listar todos os usuários

@@ -84,47 +84,48 @@ export function registerRoutes(app: Express): Server {
 
   // ==================== Authentication Routes ====================
   
-  app.post("/api/register", validateBody(registerSchema), async (req, res, next) => {
-    try {
-      const existingUser = await storage.getUserByUsername(req.body.username);
-      if (existingUser) {
-        return res.status(400).json({ error: "Nome de usuário já existe" });
-      }
+  // DISABLED: Public registration disabled. Only admins can create users via /api/users
+  // app.post("/api/register", validateBody(registerSchema), async (req, res, next) => {
+  //   try {
+  //     const existingUser = await storage.getUserByUsername(req.body.username);
+  //     if (existingUser) {
+  //       return res.status(400).json({ error: "Nome de usuário já existe" });
+  //     }
 
-      const existingEmail = await storage.getUserByEmail(req.body.email);
-      if (existingEmail) {
-        return res.status(400).json({ error: "E-mail já cadastrado" });
-      }
+  //     const existingEmail = await storage.getUserByEmail(req.body.email);
+  //     if (existingEmail) {
+  //       return res.status(400).json({ error: "E-mail já cadastrado" });
+  //     }
 
-      const user = await storage.createUser({
-        ...req.body,
-        role: "cliente", // Default role, admin can change later
-        password: await hashPassword(req.body.password),
-      });
+  //     const user = await storage.createUser({
+  //       ...req.body,
+  //       role: "cliente", // Default role, admin can change later
+  //       password: await hashPassword(req.body.password),
+  //     });
 
-      const accessToken = generateAccessToken(user);
-      const refreshToken = generateRefreshToken(user);
+  //     const accessToken = generateAccessToken(user);
+  //     const refreshToken = generateRefreshToken(user);
 
-      // Store refresh token
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 7); // 7 days
-      await storage.createRefreshToken({
-        userId: user.id,
-        token: refreshToken,
-        expiresAt,
-      });
+  //     // Store refresh token
+  //     const expiresAt = new Date();
+  //     expiresAt.setDate(expiresAt.getDate() + 7); // 7 days
+  //     await storage.createRefreshToken({
+  //       userId: user.id,
+  //       token: refreshToken,
+  //       expiresAt,
+  //     });
 
-      await logAudit(req, "REGISTRO", "users", user.id, null, user);
+  //     await logAudit(req, "REGISTRO", "users", user.id, null, user);
 
-      res.status(201).json({
-        user: sanitizeUser(user),
-        accessToken,
-        refreshToken,
-      });
-    } catch (error) {
-      next(error);
-    }
-  });
+  //     res.status(201).json({
+  //       user: sanitizeUser(user),
+  //       accessToken,
+  //       refreshToken,
+  //     });
+  //   } catch (error) {
+  //     next(error);
+  //   }
+  // });
 
   app.post("/api/login", validateBody(loginSchema), async (req, res, next) => {
     try {
