@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer, boolean, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, integer, boolean, pgEnum, numeric } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
@@ -9,6 +9,9 @@ export const roleEnum = pgEnum("role", ["porteiro", "cliente", "gestor"]);
 export const visitanteStatusEnum = pgEnum("visitante_status", ["aguardando", "aprovado", "dentro", "saiu"]);
 export const vagaStatusEnum = pgEnum("vaga_status", ["livre", "ocupada"]);
 export const veiculoSituacaoEnum = pgEnum("veiculo_situacao", ["aguardando", "docado", "carregando", "descarregando", "finalizado"]);
+export const tipoVeiculoCategoriaEnum = pgEnum("tipo_veiculo_categoria", ["carro", "moto", "cavalo", "cavalo_carreta"]);
+export const tipoProprietarioEnum = pgEnum("tipo_proprietario", ["terceiro", "agregado", "frota"]);
+export const statusCargaEnum = pgEnum("status_carga", ["carregado", "descarregado", "pernoite", "manutencao"]);
 export const checklistTipoEnum = pgEnum("checklist_tipo", ["inspecao_entrada", "inspecao_saida", "vistoria_carga", "conferencia_documentos"]);
 export const checklistStatusEnum = pgEnum("checklist_status", ["pendente", "em_andamento", "concluido"]);
 export const checklistItemTipoEnum = pgEnum("checklist_item_tipo", ["checkbox", "texto", "foto", "numero"]);
@@ -74,6 +77,9 @@ export const userPermissionsRelations = relations(userPermissions, ({ one }) => 
 export const veiculos = pgTable("veiculos", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   filialId: varchar("filial_id").notNull().references(() => filiais.id),
+  tipoVeiculoCategoria: tipoVeiculoCategoriaEnum("tipo_veiculo_categoria").notNull().default("cavalo_carreta"),
+  tipoProprietario: tipoProprietarioEnum("tipo_proprietario").notNull().default("terceiro"),
+  statusCarga: statusCargaEnum("status_carga"),
   placaCavalo: text("placa_cavalo").notNull(),
   placaCarreta: text("placa_carreta"),
   motorista: text("motorista").notNull(),
@@ -83,6 +89,8 @@ export const veiculos = pgTable("veiculos", {
   doca: text("doca"),
   vagaId: varchar("vaga_id").references(() => vagas.id),
   situacao: veiculoSituacaoEnum("situacao").notNull().default("aguardando"),
+  multi: boolean("multi").notNull().default(false),
+  valor: numeric("valor", { precision: 10, scale: 2 }),
   observacoes: text("observacoes"),
   dataEntrada: timestamp("data_entrada").notNull().defaultNow(),
   dataSaida: timestamp("data_saida"),
@@ -327,6 +335,7 @@ export const insertVeiculoSchema = createInsertSchema(veiculos).omit({
   createdAt: true, 
   updatedAt: true,
   dataEntrada: true,
+  registradoPor: true, // Backend adds this from session
 });
 export const insertVagaSchema = createInsertSchema(vagas).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertVisitanteSchema = createInsertSchema(visitantes).omit({ 

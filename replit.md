@@ -43,10 +43,17 @@ Sistema web completo para controle de entrada e saída de veículos e visitantes
 ## Funcionalidades Principais
 
 ### Controle de Portaria
-- Registro de entrada de veículos (placa cavalo, carreta, motorista, CPF, transportadora, cliente, doca)
-- Atribuição de vagas
+- Registro de entrada de veículos com suporte a múltiplos tipos:
+  - **Categorias**: Carro, Moto, Cavalo, Cavalo + Carreta
+  - **Tipo de Proprietário**: Terceiro, Agregado, Frota
+  - **Status da Carga**: Carregado, Descarregado, Pernoite, Manutenção (opcional)
+  - **Campos adicionais**: Multi (boolean), Valor (numeric)
+- Campos condicionais: placa carreta aparece apenas para tipo "Cavalo + Carreta"
+- Formulário responsivo mobile para auto-registro de motoristas
+- Atribuição de vagas (opcional)
 - Controle de situação do veículo (aguardando, docado, carregando, descarregando, finalizado)
 - Registro de saída com liberação automática da vaga
+- Atualização em tempo real via WebSocket
 
 ### Mapa de Vagas
 - Visualização em tempo real de todas as vagas
@@ -272,6 +279,19 @@ npm run build
 ```
 
 ## Funcionalidades Recentes
+
+### Registro Expandido de Veículos (Completo - Out 2025)
+- Suporte a múltiplos tipos de veículos:
+  - **Categorias**: Carro, Moto, Cavalo, Cavalo + Carreta (enums PostgreSQL)
+  - **Tipo de Proprietário**: Terceiro, Agregado, Frota (enums PostgreSQL)
+  - **Status da Carga**: Carregado, Descarregado, Pernoite, Manutenção (enum opcional)
+  - **Campos novos**: Multi (boolean), Valor (numeric/decimal)
+- Formulário condicional: placa carreta aparece apenas quando tipo "Cavalo + Carreta" selecionado
+- Design responsivo mobile para auto-registro de motoristas
+- Validação aprimorada: vagaId e statusCarga opcionais, removidos do payload quando vazios
+- Cache invalidation corrigido com filialId para sincronização em tempo real
+- Data-testids adicionados para facilitar testes end-to-end
+- Testes E2E passando: entrada e saída de veículos com atualização UI imediata
 
 ### Exportação PDF
 - Relatórios exportáveis em PDF além de CSV

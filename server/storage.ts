@@ -68,7 +68,7 @@ export interface IStorage {
   getVeiculo(id: string): Promise<Veiculo | undefined>;
   getVeiculosByFilial(filialId: string): Promise<Veiculo[]>;
   getAllVeiculos(): Promise<Veiculo[]>;
-  createVeiculo(veiculo: InsertVeiculo): Promise<Veiculo>;
+  createVeiculo(veiculo: InsertVeiculo & { registradoPor: string }): Promise<Veiculo>;
   updateVeiculo(id: string, data: Partial<Veiculo>): Promise<Veiculo>;
   registrarSaida(id: string): Promise<Veiculo>;
 
@@ -238,7 +238,7 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(veiculos).orderBy(desc(veiculos.dataEntrada));
   }
 
-  async createVeiculo(veiculo: InsertVeiculo): Promise<Veiculo> {
+  async createVeiculo(veiculo: InsertVeiculo & { registradoPor: string }): Promise<Veiculo> {
     const [v] = await db.insert(veiculos).values(veiculo).returning();
     
     // Update vaga status if vaga is assigned
