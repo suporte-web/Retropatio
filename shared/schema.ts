@@ -12,6 +12,8 @@ export const veiculoSituacaoEnum = pgEnum("veiculo_situacao", ["aguardando", "do
 export const checklistTipoEnum = pgEnum("checklist_tipo", ["inspecao_entrada", "inspecao_saida", "vistoria_carga", "conferencia_documentos"]);
 export const checklistStatusEnum = pgEnum("checklist_status", ["pendente", "em_andamento", "concluido"]);
 export const checklistItemTipoEnum = pgEnum("checklist_item_tipo", ["checkbox", "texto", "foto", "numero"]);
+export const notificationTipoEnum = pgEnum("notification_tipo", ["visitante_aprovacao", "chamada_motorista", "veiculo_alerta", "sistema"]);
+export const notificationStatusEnum = pgEnum("notification_status", ["nao_lida", "lida", "arquivada"]);
 
 // Filiais (branches) - Master table
 export const filiais = pgTable("filiais", {
@@ -241,6 +243,33 @@ export const checklistItemsRelations = relations(checklistItems, ({ one }) => ({
   }),
 }));
 
+// Notifications
+export const notifications = pgTable("notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  filialId: varchar("filial_id").notNull().references(() => filiais.id),
+  tipo: notificationTipoEnum("tipo").notNull(),
+  titulo: text("titulo").notNull(),
+  mensagem: text("mensagem").notNull(),
+  status: notificationStatusEnum("status").notNull().default("nao_lida"),
+  entidadeId: varchar("entidade_id"), // ID do visitante, chamada, etc
+  entidadeTipo: text("entidade_tipo"), // visitante, chamada, veiculo
+  actionUrl: text("action_url"), // URL para ação rápida
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  readAt: timestamp("read_at"),
+});
+
+export const notificationsRelations = relations(notifications, ({ one }) => ({
+  user: one(users, {
+    fields: [notifications.userId],
+    references: [users.id],
+  }),
+  filial: one(filiais, {
+    fields: [notifications.filialId],
+    references: [filiais.id],
+  }),
+}));
+
 // Refresh Tokens
 export const refreshTokens = pgTable("refresh_tokens", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -318,6 +347,11 @@ export const insertChecklistItemSchema = createInsertSchema(checklistItems).omit
   createdAt: true, 
   updatedAt: true,
 });
+export const insertNotificationSchema = createInsertSchema(notifications).omit({ 
+  id: true, 
+  createdAt: true,
+  readAt: true,
+});
 export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({ id: true, createdAt: true });
 export const insertRefreshTokenSchema = createInsertSchema(refreshTokens).omit({ id: true, createdAt: true });
 
@@ -345,6 +379,7 @@ export type Visitante = typeof visitantes.$inferSelect;
 export type Chamada = typeof chamadas.$inferSelect;
 export type Checklist = typeof checklists.$inferSelect;
 export type ChecklistItem = typeof checklistItems.$inferSelect;
+export type Notification = typeof notifications.$inferSelect;
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type RefreshToken = typeof refreshTokens.$inferSelect;
 
@@ -358,5 +393,6 @@ export type InsertVisitante = z.infer<typeof insertVisitanteSchema>;
 export type InsertChamada = z.infer<typeof insertChamadaSchema>;
 export type InsertChecklist = z.infer<typeof insertChecklistSchema>;
 export type InsertChecklistItem = z.infer<typeof insertChecklistItemSchema>;
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
 export type InsertRefreshToken = z.infer<typeof insertRefreshTokenSchema>;
