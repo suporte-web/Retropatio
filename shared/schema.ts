@@ -9,6 +9,9 @@ export const roleEnum = pgEnum("role", ["porteiro", "cliente", "gestor"]);
 export const visitanteStatusEnum = pgEnum("visitante_status", ["aguardando", "aprovado", "dentro", "saiu"]);
 export const vagaStatusEnum = pgEnum("vaga_status", ["livre", "ocupada"]);
 export const veiculoSituacaoEnum = pgEnum("veiculo_situacao", ["aguardando", "docado", "carregando", "descarregando", "finalizado"]);
+export const checklistTipoEnum = pgEnum("checklist_tipo", ["inspecao_entrada", "inspecao_saida", "vistoria_carga", "conferencia_documentos"]);
+export const checklistStatusEnum = pgEnum("checklist_status", ["pendente", "em_andamento", "concluido"]);
+export const checklistItemTipoEnum = pgEnum("checklist_item_tipo", ["checkbox", "texto", "foto", "numero"]);
 
 // Filiais (branches) - Master table
 export const filiais = pgTable("filiais", {
@@ -181,6 +184,63 @@ export const chamadasRelations = relations(chamadas, ({ one }) => ({
   }),
 }));
 
+// Checklists (defined first)
+export const checklists = pgTable("checklists", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  filialId: varchar("filial_id").notNull().references(() => filiais.id),
+  veiculoId: varchar("veiculo_id").notNull().references(() => veiculos.id),
+  tipo: checklistTipoEnum("tipo").notNull(),
+  status: checklistStatusEnum("status").notNull().default("pendente"),
+  criadoPor: varchar("criado_por").notNull().references(() => users.id),
+  concluidoPor: varchar("concluido_por").references(() => users.id),
+  dataConclusao: timestamp("data_conclusao"),
+  observacoes: text("observacoes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Checklist Items
+export const checklistItems = pgTable("checklist_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  checklistId: varchar("checklist_id").notNull().references(() => checklists.id, { onDelete: "cascade" }),
+  descricao: text("descricao").notNull(),
+  ordem: integer("ordem").notNull(),
+  tipo: checklistItemTipoEnum("tipo").notNull().default("checkbox"),
+  valor: text("valor"),
+  obrigatorio: boolean("obrigatorio").notNull().default(false),
+  fotos: text("fotos").array(),
+  observacoes: text("observacoes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const checklistsRelations = relations(checklists, ({ one, many }) => ({
+  filial: one(filiais, {
+    fields: [checklists.filialId],
+    references: [filiais.id],
+  }),
+  veiculo: one(veiculos, {
+    fields: [checklists.veiculoId],
+    references: [veiculos.id],
+  }),
+  criador: one(users, {
+    fields: [checklists.criadoPor],
+    references: [users.id],
+  }),
+  responsavel: one(users, {
+    fields: [checklists.concluidoPor],
+    references: [users.id],
+  }),
+  items: many(checklistItems),
+}));
+
+export const checklistItemsRelations = relations(checklistItems, ({ one }) => ({
+  checklist: one(checklists, {
+    fields: [checklistItems.checklistId],
+    references: [checklists.id],
+  }),
+}));
+
 // Refresh Tokens
 export const refreshTokens = pgTable("refresh_tokens", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -247,6 +307,17 @@ export const insertVisitanteSchema = createInsertSchema(visitantes).omit({
   dataAprovacao: true,
 });
 export const insertChamadaSchema = createInsertSchema(chamadas).omit({ id: true, createdAt: true });
+export const insertChecklistSchema = createInsertSchema(checklists).omit({ 
+  id: true, 
+  createdAt: true, 
+  updatedAt: true,
+  dataConclusao: true,
+});
+export const insertChecklistItemSchema = createInsertSchema(checklistItems).omit({ 
+  id: true, 
+  createdAt: true, 
+  updatedAt: true,
+});
 export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({ id: true, createdAt: true });
 export const insertRefreshTokenSchema = createInsertSchema(refreshTokens).omit({ id: true, createdAt: true });
 
@@ -272,6 +343,8 @@ export type Veiculo = typeof veiculos.$inferSelect;
 export type Vaga = typeof vagas.$inferSelect;
 export type Visitante = typeof visitantes.$inferSelect;
 export type Chamada = typeof chamadas.$inferSelect;
+export type Checklist = typeof checklists.$inferSelect;
+export type ChecklistItem = typeof checklistItems.$inferSelect;
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type RefreshToken = typeof refreshTokens.$inferSelect;
 
@@ -283,5 +356,7 @@ export type InsertVeiculo = z.infer<typeof insertVeiculoSchema>;
 export type InsertVaga = z.infer<typeof insertVagaSchema>;
 export type InsertVisitante = z.infer<typeof insertVisitanteSchema>;
 export type InsertChamada = z.infer<typeof insertChamadaSchema>;
+export type InsertChecklist = z.infer<typeof insertChecklistSchema>;
+export type InsertChecklistItem = z.infer<typeof insertChecklistItemSchema>;
 export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
 export type InsertRefreshToken = z.infer<typeof insertRefreshTokenSchema>;

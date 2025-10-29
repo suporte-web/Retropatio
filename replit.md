@@ -183,6 +183,8 @@ Cliente:
 - `vagas` - Vagas do pátio
 - `visitantes` - Visitantes e prestadores
 - `chamadas` - Chamadas de motorista
+- `checklists` - Checklists digitais por veículo
+- `checklist_items` - Itens de checklist com suporte a fotos
 - `audit_logs` - Logs de auditoria
 
 ## Segurança
@@ -242,14 +244,36 @@ tsx server/seed.ts
 npm run build
 ```
 
+## Funcionalidades Recentes
+
+### Exportação PDF
+- Relatórios exportáveis em PDF além de CSV
+- Formato landscape com tabela formatada
+- Headers com data e total de registros
+- Cores do tema aplicadas
+
+### Dashboard Analítico
+- Gráfico de barras: movimentações dos últimos 7 dias
+- Gráfico de pizza: distribuição por situação
+- Métrica de tempo médio de permanência (calculado em horas com precisão de frações)
+- Design responsivo com Recharts
+
+### Sistema de Checklist Digital (Em Desenvolvimento)
+- Schema de banco de dados criado:
+  - Tabela `checklists`: gerencia checklists por veículo
+  - Tabela `checklist_items`: itens individuais com suporte a diferentes tipos (checkbox, texto, foto, número)
+- Suporte a múltiplos tipos de checklist (inspeção entrada/saída, vistoria carga)
+- Upload e associação de fotos por item
+- Status de checklist (pendente, em_andamento, concluído)
+
 ## Próximas Funcionalidades (Futuro)
 
-1. Integração com ERP externo
-2. Leitura automática de placas (LPR) com câmeras
-3. Checklist digital com captura de fotos
-4. Dashboard analítico com gráficos
-5. Notificações por email e SMS (Twilio)
-6. Relatórios em PDF
+1. Interface de criação e preenchimento de checklists
+2. Upload de fotos para itens do checklist
+3. Sistema de notificações internas (toasts + persistentes)
+4. Integração com ERP externo
+5. Leitura automática de placas (LPR) com câmeras
+6. Notificações por email e SMS (Twilio)
 7. Aplicativo mobile
 8. Impressão de etiquetas/comprovantes
 
@@ -292,7 +316,9 @@ npm run build
 ✅ Interface completa para todos os perfis
 ✅ Dark mode
 ✅ Responsivo
-✅ Exportação CSV
+✅ Exportação CSV e PDF
+✅ Dashboard analítico com gráficos (Recharts)
+🚧 Sistema de checklist digital (schema criado, interface em desenvolvimento)
 
 ## Contato e Suporte
 
