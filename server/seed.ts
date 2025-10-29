@@ -1,7 +1,7 @@
 import { db } from "./db";
-import { filiais, users, vagas } from "@shared/schema";
+import { filiais, users, vagas, userPermissions } from "@shared/schema";
 import { hashPassword } from "./auth";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
 async function seed() {
   console.log("🌱 Iniciando seed do banco de dados...");
@@ -73,14 +73,39 @@ async function seed() {
     },
   ];
 
+  const createdUsers = [];
   for (const userData of usersData) {
     const [existing] = await db.select().from(users).where(eq(users.username, userData.username));
     
     if (existing) {
       console.log(`✓ Usuário ${userData.username} já existe`);
+      createdUsers.push(existing);
     } else {
-      await db.insert(users).values(userData);
+      const [u] = await db.insert(users).values(userData).returning();
+      createdUsers.push(u);
       console.log(`✓ Usuário ${userData.username} criado (password: ${userData.username}123)`);
+    }
+  }
+
+  // Create user permissions - associate users with all filiais
+  console.log("Criando permissões de usuário por filial...");
+  for (const user of createdUsers) {
+    for (const filial of createdFiliais) {
+      const [existing] = await db.select().from(userPermissions)
+        .where(and(
+          eq(userPermissions.userId, user.id),
+          eq(userPermissions.filialId, filial.id)
+        ));
+      
+      if (!existing) {
+        await db.insert(userPermissions).values({
+          userId: user.id,
+          filialId: filial.id,
+        });
+        console.log(`✓ Permissão criada: ${user.username} → ${filial.codigo}`);
+      } else {
+        console.log(`✓ Permissão já existe: ${user.username} → ${filial.codigo}`);
+      }
     }
   }
 

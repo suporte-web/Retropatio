@@ -1,21 +1,20 @@
-// Reference: blueprint:javascript_auth_all_persistance
 import { createContext, ReactNode, useContext } from "react";
 import {
   useQuery,
   useMutation,
   UseMutationResult,
 } from "@tanstack/react-query";
-import { User as SelectUser } from "@shared/schema";
-import { getQueryFn, apiRequest, queryClient } from "../lib/queryClient";
+import type { User as SelectUser } from "@shared/schema";
+import { getQueryFn, apiRequest, queryClient, setTokens, clearTokens, getRefreshToken } from "../lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 type AuthContextType = {
   user: SelectUser | null;
   isLoading: boolean;
   error: Error | null;
-  loginMutation: UseMutationResult<SelectUser, Error, LoginData>;
+  loginMutation: UseMutationResult<AuthResponse, Error, LoginData>;
   logoutMutation: UseMutationResult<void, Error, void>;
-  registerMutation: UseMutationResult<SelectUser, Error, RegisterData>;
+  registerMutation: UseMutationResult<AuthResponse, Error, RegisterData>;
 };
 
 type LoginData = {
@@ -28,7 +27,12 @@ type RegisterData = {
   email: string;
   password: string;
   nome: string;
-  role: "porteiro" | "cliente" | "gestor";
+};
+
+type AuthResponse = {
+  user: SelectUser;
+  accessToken: string;
+  refreshToken: string;
 };
 
 export const AuthContext = createContext<AuthContextType | null>(null);
@@ -45,19 +49,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     queryFn: getQueryFn({ on401: "returnNull" }),
   });
 
-  const loginMutation = useMutation({
-    mutationFn: async (credentials: LoginData) => {
-      const res = await apiRequest("POST", "/api/login", credentials);
+  const loginMutation = useMutation<AuthResponse, Error, LoginData>({
+    mutationFn: async (credentials) => {
+      const res = await apiRequest("POST", "/api/login", credentials, false);
       return await res.json();
     },
-    onSuccess: (user: SelectUser) => {
-      queryClient.setQueryData(["/api/user"], user);
+    onSuccess: (data) => {
+      setTokens(data.accessToken, data.refreshToken);
+      queryClient.setQueryData(["/api/user"], data.user);
       toast({
         title: "Login realizado",
-        description: `Bem-vindo, ${user.nome}!`,
+        description: `Bem-vindo, ${data.user.nome}!`,
       });
     },
-    onError: (error: Error) => {
+    onError: (error) => {
       toast({
         title: "Erro no login",
         description: error.message,
@@ -66,19 +71,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
   });
 
-  const registerMutation = useMutation({
-    mutationFn: async (credentials: RegisterData) => {
-      const res = await apiRequest("POST", "/api/register", credentials);
+  const registerMutation = useMutation<AuthResponse, Error, RegisterData>({
+    mutationFn: async (credentials) => {
+      const res = await apiRequest("POST", "/api/register", credentials, false);
       return await res.json();
     },
-    onSuccess: (user: SelectUser) => {
-      queryClient.setQueryData(["/api/user"], user);
+    onSuccess: (data) => {
+      setTokens(data.accessToken, data.refreshToken);
+      queryClient.setQueryData(["/api/user"], data.user);
       toast({
         title: "Registro realizado",
-        description: `Bem-vindo, ${user.nome}!`,
+        description: `Bem-vindo, ${data.user.nome}!`,
       });
     },
-    onError: (error: Error) => {
+    onError: (error) => {
       toast({
         title: "Erro no registro",
         description: error.message,
@@ -87,20 +93,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
   });
 
-  const logoutMutation = useMutation({
+  const logoutMutation = useMutation<void, Error, void>({
     mutationFn: async () => {
-      await apiRequest("POST", "/api/logout", {});
+      const refreshToken = getRefreshToken();
+      await apiRequest("POST", "/api/logout", { refreshToken });
     },
     onSuccess: () => {
+      clearTokens();
       queryClient.setQueryData(["/api/user"], null);
-      // Clear filial selection
-      localStorage.removeItem("selected_filial");
       toast({
         title: "Logout realizado",
         description: "Até logo!",
       });
     },
-    onError: (error: Error) => {
+    onError: (error) => {
+      clearTokens();
+      queryClient.setQueryData(["/api/user"], null);
       toast({
         title: "Erro no logout",
         description: error.message,
