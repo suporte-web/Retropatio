@@ -16,6 +16,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 export default function RelatoriosPage() {
   const filialId = localStorage.getItem("selected_filial");
@@ -26,6 +28,7 @@ export default function RelatoriosPage() {
     transportadora: "",
     situacao: "",
   });
+  const [isExporting, setIsExporting] = useState(false);
 
   const { data: veiculos, isLoading } = useQuery<Veiculo[]>({
     queryKey: ["/api/veiculos", filialId],
@@ -43,27 +46,103 @@ export default function RelatoriosPage() {
 
   const exportToCSV = () => {
     if (!filteredVeiculos) return;
+    
+    setIsExporting(true);
+    try {
+      const headers = ["Placa Cavalo", "Placa Carreta", "Motorista", "CPF", "Transportadora", "Cliente", "Doca", "Situação", "Entrada", "Saída"];
+      const rows = filteredVeiculos.map((v) => [
+        v.placaCavalo,
+        v.placaCarreta || "",
+        v.motorista,
+        v.cpfMotorista || "",
+        v.transportadora || "",
+        v.cliente || "",
+        v.doca || "",
+        v.situacao,
+        format(new Date(v.dataEntrada), "dd/MM/yyyy HH:mm"),
+        v.dataSaida ? format(new Date(v.dataSaida), "dd/MM/yyyy HH:mm") : "",
+      ]);
 
-    const headers = ["Placa Cavalo", "Placa Carreta", "Motorista", "CPF", "Transportadora", "Cliente", "Doca", "Situação", "Entrada", "Saída"];
-    const rows = filteredVeiculos.map((v) => [
-      v.placaCavalo,
-      v.placaCarreta || "",
-      v.motorista,
-      v.cpfMotorista || "",
-      v.transportadora || "",
-      v.cliente || "",
-      v.doca || "",
-      v.situacao,
-      format(new Date(v.dataEntrada), "dd/MM/yyyy HH:mm"),
-      v.dataSaida ? format(new Date(v.dataSaida), "dd/MM/yyyy HH:mm") : "",
-    ]);
+      const csv = [headers, ...rows].map((row) => row.join(",")).join("\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `relatorio-veiculos-${format(new Date(), "yyyy-MM-dd")}.csv`;
+      link.click();
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
-    const csv = [headers, ...rows].map((row) => row.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `relatorio-veiculos-${format(new Date(), "yyyy-MM-dd")}.csv`;
-    link.click();
+  const exportToPDF = () => {
+    if (!filteredVeiculos) return;
+
+    setIsExporting(true);
+    try {
+      const doc = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: "a4",
+      });
+
+      // Header
+      doc.setFontSize(18);
+      doc.text("Relatório de Movimentação de Veículos", 14, 15);
+      
+      doc.setFontSize(10);
+      doc.text(`Data: ${format(new Date(), "dd/MM/yyyy HH:mm", { locale: ptBR })}`, 14, 22);
+      doc.text(`Total de Registros: ${filteredVeiculos.length}`, 14, 27);
+
+      // Table
+      const headers = [
+        "Placa Cavalo",
+        "Placa Carreta",
+        "Motorista",
+        "CPF",
+        "Transportadora",
+        "Cliente",
+        "Doca",
+        "Situação",
+        "Entrada",
+        "Saída"
+      ];
+
+      const rows = filteredVeiculos.map((v) => [
+        v.placaCavalo,
+        v.placaCarreta || "-",
+        v.motorista,
+        v.cpfMotorista || "-",
+        v.transportadora || "-",
+        v.cliente || "-",
+        v.doca || "-",
+        v.situacao,
+        format(new Date(v.dataEntrada), "dd/MM/yyyy HH:mm"),
+        v.dataSaida ? format(new Date(v.dataSaida), "dd/MM/yyyy HH:mm") : "-",
+      ]);
+
+      autoTable(doc, {
+        head: [headers],
+        body: rows,
+        startY: 32,
+        styles: {
+          fontSize: 8,
+          cellPadding: 2,
+        },
+        headStyles: {
+          fillColor: [59, 130, 246], // Primary blue color
+          textColor: 255,
+          fontStyle: "bold",
+        },
+        alternateRowStyles: {
+          fillColor: [245, 245, 245],
+        },
+        margin: { top: 32 },
+      });
+
+      doc.save(`relatorio-veiculos-${format(new Date(), "yyyy-MM-dd")}.pdf`);
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
@@ -172,11 +251,38 @@ export default function RelatoriosPage() {
             <div className="flex gap-2">
               <Button
                 onClick={exportToCSV}
-                disabled={!filteredVeiculos || filteredVeiculos.length === 0}
+                disabled={!filteredVeiculos || filteredVeiculos.length === 0 || isExporting}
                 data-testid="button-export-csv"
+                variant="outline"
               >
-                <FileDown className="mr-2 h-4 w-4" />
-                Exportar CSV
+                {isExporting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Exportando...
+                  </>
+                ) : (
+                  <>
+                    <FileDown className="mr-2 h-4 w-4" />
+                    Exportar CSV
+                  </>
+                )}
+              </Button>
+              <Button
+                onClick={exportToPDF}
+                disabled={!filteredVeiculos || filteredVeiculos.length === 0 || isExporting}
+                data-testid="button-export-pdf"
+              >
+                {isExporting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Exportando...
+                  </>
+                ) : (
+                  <>
+                    <FileText className="mr-2 h-4 w-4" />
+                    Exportar PDF
+                  </>
+                )}
               </Button>
             </div>
           </div>
