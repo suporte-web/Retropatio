@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Building2, Plus, Loader2, MapPin } from "lucide-react";
+import { Building2, Plus, Loader2, MapPin, Edit } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Filial } from "@shared/schema";
@@ -21,10 +21,16 @@ import { Badge } from "@/components/ui/badge";
 export default function FiliaisPage() {
   const { toast } = useToast();
   const [showNewDialog, setShowNewDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editingFilial, setEditingFilial] = useState<Filial | null>(null);
 
   const [formData, setFormData] = useState({
     nome: "",
     codigo: "",
+    endereco: "",
+  });
+
+  const [editFormData, setEditFormData] = useState({
     endereco: "",
   });
 
@@ -73,9 +79,48 @@ export default function FiliaisPage() {
     },
   });
 
+  const updateFilialMutation = useMutation({
+    mutationFn: async ({ filialId, endereco }: { filialId: string; endereco: string }) => {
+      const res = await apiRequest("PATCH", `/api/filiais/${filialId}`, { endereco });
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/filiais"] });
+      toast({
+        title: "Endereço atualizado",
+        description: "Endereço da filial atualizado com sucesso",
+      });
+      setShowEditDialog(false);
+      setEditingFilial(null);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Erro ao atualizar endereço",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     createFilialMutation.mutate(formData);
+  };
+
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingFilial) {
+      updateFilialMutation.mutate({
+        filialId: editingFilial.id,
+        endereco: editFormData.endereco,
+      });
+    }
+  };
+
+  const openEditDialog = (filial: Filial) => {
+    setEditingFilial(filial);
+    setEditFormData({ endereco: filial.endereco });
+    setShowEditDialog(true);
   };
 
   const filiaisAtivas = filiais?.filter((f) => f.ativo).length || 0;
@@ -164,16 +209,28 @@ export default function FiliaisPage() {
                       <MapPin className="h-4 w-4 mt-0.5 flex-shrink-0" />
                       <span>{filial.endereco}</span>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="w-full"
-                      onClick={() => toggleFilialStatusMutation.mutate({ filialId: filial.id, ativo: !filial.ativo })}
-                      disabled={toggleFilialStatusMutation.isPending}
-                      data-testid={`button-toggle-${filial.codigo}`}
-                    >
-                      {filial.ativo ? "Desativar" : "Ativar"}
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => openEditDialog(filial)}
+                        data-testid={`button-editar-${filial.codigo}`}
+                      >
+                        <Edit className="h-4 w-4 mr-2" />
+                        Editar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => toggleFilialStatusMutation.mutate({ filialId: filial.id, ativo: !filial.ativo })}
+                        disabled={toggleFilialStatusMutation.isPending}
+                        data-testid={`button-toggle-${filial.codigo}`}
+                      >
+                        {filial.ativo ? "Desativar" : "Ativar"}
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
               ))}
@@ -250,6 +307,57 @@ export default function FiliaisPage() {
                   </>
                 ) : (
                   "Criar Filial"
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Editar Endereço */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Endereço</DialogTitle>
+            <DialogDescription>
+              Atualize o endereço da filial {editingFilial?.nome}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleEditSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-endereco">Endereço *</Label>
+              <Input
+                id="edit-endereco"
+                data-testid="input-edit-endereco"
+                placeholder="Rua Exemplo, 123 - Cidade/Estado"
+                value={editFormData.endereco}
+                onChange={(e) => setEditFormData({ endereco: e.target.value })}
+                required
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setShowEditDialog(false);
+                  setEditingFilial(null);
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                disabled={updateFilialMutation.isPending}
+                data-testid="button-salvar-endereco"
+              >
+                {updateFilialMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Salvando...
+                  </>
+                ) : (
+                  "Salvar"
                 )}
               </Button>
             </DialogFooter>
