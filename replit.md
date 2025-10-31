@@ -82,18 +82,27 @@ app.patch("/api/entity/:id", requireAuth, requireRole("role"), requireFilial, as
 });
 ```
 
-### Known Security Issue
-⚠️ **WebSocket broadcasts**: Currently send data to ALL connected clients without filial filtering. This allows users from one branch to see real-time updates from other branches.
+### Recent Security & Feature Updates (October 2025)
+✅ **WebSocket Filial Filtering**: WebSocket connections now track filialId per client and broadcasts are filtered by target filial
+   - filialId extracted from WebSocket URL query parameter during connection
+   - All 9 broadcast calls updated to include targetFilialId parameter
+   - Query invalidations include filialId for proper cache updates
+   - Resolves cross-tenant data exposure in real-time events
 
-**Impact**: Cross-tenant data exposure via real-time events (veiculo_entrada, vaga_updated, visitante_novo, chamada_nova, etc.)
+✅ **Portaria UX Enhancements**:
+   - Quick-selection cards for Vehicle/Visitor operations with real-time statistics
+   - Visitor approval toast notifications (5-second duration)
 
-**Mitigation needed**: Track each WebSocket connection's filialId (validated at handshake) and only broadcast events to matching tenants.
+✅ **User Permissions Management**:
+   - New administrative interface for managing user-filial permissions
+   - Gestores can assign/remove filial access for any user
+   - Dialog-based interface showing current permissions and available filials
+   - Routes: GET/POST `/api/users/:userId/permissions`, DELETE `/api/user-permissions/:id`
+   - Storage method `getUserPermissions()` returns permissions with filial details via join
 
-**Status**: Documented for future implementation - Low priority as WebSocket data is read-only and users still cannot modify other branches' data.
-
-### Recent Security Fixes (October 2025)
-✅ Fixed all parameterized GET routes to use header-based filialId
-✅ Added entity ownership verification to all PATCH/DELETE routes
-✅ Implemented filialId stripping in all PATCH handlers
-✅ Added requireFilial middleware to all tenant-scoped routes
-✅ Fixed /api/veiculos/all to respect filial isolation
+✅ **Previous Security Fixes**:
+   - Fixed all parameterized GET routes to use header-based filialId
+   - Added entity ownership verification to all PATCH/DELETE routes
+   - Implemented filialId stripping in all PATCH handlers
+   - Added requireFilial middleware to all tenant-scoped routes
+   - Fixed /api/veiculos/all to respect filial isolation

@@ -71,7 +71,8 @@ export interface IStorage {
   getAllFiliais(): Promise<Filial[]>;
 
   // User Permission methods
-  getUserPermissions(userId: string): Promise<UserPermission[]>;
+  getUserPermission(id: string): Promise<UserPermission | undefined>;
+  getUserPermissions(userId: string): Promise<(UserPermission & { filial: Filial })[]>;
   createUserPermission(permission: InsertUserPermission): Promise<UserPermission>;
   deleteUserPermission(id: string): Promise<void>;
   getUserFilialIds(userId: string): Promise<string[]>;
@@ -242,8 +243,25 @@ export class DatabaseStorage implements IStorage {
   }
 
   // User Permission methods
-  async getUserPermissions(userId: string): Promise<UserPermission[]> {
-    return await db.select().from(userPermissions).where(eq(userPermissions.userId, userId));
+  async getUserPermission(id: string): Promise<UserPermission | undefined> {
+    const [perm] = await db.select().from(userPermissions).where(eq(userPermissions.id, id));
+    return perm || undefined;
+  }
+
+  async getUserPermissions(userId: string): Promise<(UserPermission & { filial: Filial })[]> {
+    const results = await db
+      .select({
+        permission: userPermissions,
+        filial: filiais,
+      })
+      .from(userPermissions)
+      .leftJoin(filiais, eq(userPermissions.filialId, filiais.id))
+      .where(eq(userPermissions.userId, userId));
+    
+    return results.map(r => ({
+      ...r.permission,
+      filial: r.filial!,
+    }));
   }
 
   async createUserPermission(permission: InsertUserPermission): Promise<UserPermission> {

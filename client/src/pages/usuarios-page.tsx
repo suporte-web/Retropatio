@@ -4,11 +4,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Users, Plus, Loader2, Edit, Trash2 } from "lucide-react";
+import { Users, Plus, Loader2, Edit, Trash2, Building2, X } from "lucide-react";
 import { RoleBadge } from "@/components/role-badge";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { User } from "@shared/schema";
+import type { User, Filial } from "@shared/schema";
 import {
   Dialog,
   DialogContent,
@@ -20,10 +20,21 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 
+type UserPermission = {
+  id: string;
+  userId: string;
+  filialId: string;
+  createdAt: Date;
+  filial: Filial;
+};
+
 export default function UsuariosPage() {
   const { toast } = useToast();
   const [showNewDialog, setShowNewDialog] = useState(false);
+  const [showPermissionsDialog, setShowPermissionsDialog] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedFilialId, setSelectedFilialId] = useState<string>("");
 
   const [formData, setFormData] = useState({
     username: "",
@@ -35,6 +46,22 @@ export default function UsuariosPage() {
 
   const { data: users, isLoading } = useQuery<User[]>({
     queryKey: ["/api/users"],
+  });
+
+  const { data: allFiliais } = useQuery<Filial[]>({
+    queryKey: ["/api/filiais"],
+  });
+
+  const { data: currentUserFilialIds } = useQuery<string[]>({
+    queryKey: ["/api/user-filiais"],
+  });
+
+  // Only show filiais that the current gestor has access to
+  const filiais = allFiliais?.filter(f => currentUserFilialIds?.includes(f.id));
+
+  const { data: userPermissions, isLoading: isLoadingPermissions } = useQuery<UserPermission[]>({
+    queryKey: ["/api/users", selectedUserId, "permissions"],
+    enabled: !!selectedUserId,
   });
 
   const createUserMutation = useMutation({
@@ -76,6 +103,41 @@ export default function UsuariosPage() {
       toast({
         title: "Status atualizado",
         description: "Status do usuário alterado",
+      });
+    },
+  });
+
+  const addPermissionMutation = useMutation({
+    mutationFn: async ({ userId, filialId }: { userId: string; filialId: string }) => {
+      const res = await apiRequest("POST", `/api/users/${userId}/permissions`, { filialId });
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users", selectedUserId, "permissions"] });
+      toast({
+        title: "Permissão adicionada",
+        description: "Filial adicionada ao usuário com sucesso",
+      });
+      setSelectedFilialId("");
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Erro ao adicionar permissão",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const removePermissionMutation = useMutation({
+    mutationFn: async (permissionId: string) => {
+      await apiRequest("DELETE", `/api/user-permissions/${permissionId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users", selectedUserId, "permissions"] });
+      toast({
+        title: "Permissão removida",
+        description: "Filial removida do usuário",
       });
     },
   });
@@ -181,6 +243,18 @@ export default function UsuariosPage() {
                     </div>
                   </div>
                   <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setSelectedUserId(user.id);
+                        setShowPermissionsDialog(true);
+                      }}
+                      data-testid={`button-permissions-${user.username}`}
+                    >
+                      <Building2 className="mr-2 h-4 w-4" />
+                      Filiais
+                    </Button>
                     <Button
                       size="sm"
                       variant="outline"
@@ -299,6 +373,115 @@ export default function UsuariosPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Gerenciar Permissões */}
+      <Dialog open={showPermissionsDialog} onOpenChange={setShowPermissionsDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Gerenciar Filiais do Usuário</DialogTitle>
+            <DialogDescription>
+              Adicione ou remova filiais às quais o usuário tem acesso
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6">
+            {/* Adicionar Nova Permissão */}
+            <div className="space-y-2">
+              <Label>Adicionar Filial</Label>
+              <div className="flex gap-2">
+                <Select
+                  value={selectedFilialId}
+                  onValueChange={setSelectedFilialId}
+                >
+                  <SelectTrigger data-testid="select-filial">
+                    <SelectValue placeholder="Selecione uma filial" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {filiais
+                      ?.filter(f => !userPermissions?.some(p => p.filialId === f.id))
+                      ?.map((filial) => (
+                        <SelectItem key={filial.id} value={filial.id}>
+                          {filial.nome} ({filial.codigo})
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  onClick={() => selectedUserId && selectedFilialId && addPermissionMutation.mutate({ userId: selectedUserId, filialId: selectedFilialId })}
+                  disabled={!selectedFilialId || addPermissionMutation.isPending}
+                  data-testid="button-add-permission"
+                >
+                  {addPermissionMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Adicionar
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            {/* Lista de Permissões Atuais */}
+            <div className="space-y-2">
+              <Label>Filiais com Acesso</Label>
+              {isLoadingPermissions ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : userPermissions && userPermissions.length > 0 ? (
+                <div className="space-y-2">
+                  {userPermissions.map((permission) => (
+                    <div
+                      key={permission.id}
+                      className="flex items-center justify-between p-3 border rounded-lg"
+                      data-testid={`permission-${permission.filial.codigo}`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Building2 className="h-4 w-4 text-muted-foreground" />
+                        <div>
+                          <div className="font-medium">{permission.filial.nome}</div>
+                          <div className="text-sm text-muted-foreground">
+                            Código: {permission.filial.codigo}
+                          </div>
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => removePermissionMutation.mutate(permission.id)}
+                        disabled={removePermissionMutation.isPending}
+                        data-testid={`button-remove-permission-${permission.filial.codigo}`}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 border rounded-lg">
+                  <Building2 className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+                  <p className="text-muted-foreground">Nenhuma filial atribuída</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowPermissionsDialog(false);
+                setSelectedUserId(null);
+                setSelectedFilialId("");
+              }}
+            >
+              Fechar
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

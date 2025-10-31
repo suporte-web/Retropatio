@@ -301,6 +301,78 @@ export function registerRoutes(app: Express): Server {
     }
   });
 
+  // ==================== User Permissions Routes ====================
+  
+  // Get all permissions for a user (with filial details)
+  app.get("/api/users/:userId/permissions", requireAuth, requireRole("gestor"), async (req, res, next) => {
+    try {
+      const currentUser = (req as any).user as User;
+      const currentUserFilials = await storage.getUserFilialIds(currentUser.id);
+      
+      // Get all permissions but only return those for filials the current user has access to
+      const allPermissions = await storage.getUserPermissions(req.params.userId);
+      const filteredPermissions = allPermissions.filter(p => currentUserFilials.includes(p.filialId));
+      
+      res.json(filteredPermissions);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Add permission for a user
+  app.post("/api/users/:userId/permissions", requireAuth, requireRole("gestor"), async (req, res, next) => {
+    try {
+      const currentUser = (req as any).user as User;
+      const { filialId } = req.body;
+      
+      if (!filialId) {
+        return res.status(400).json({ error: "filialId é obrigatório" });
+      }
+
+      // Verify that the current gestor has access to the filial they're trying to assign
+      const currentUserFilials = await storage.getUserFilialIds(currentUser.id);
+      if (!currentUserFilials.includes(filialId)) {
+        return res.status(403).json({ error: "Você não tem permissão para atribuir acesso a esta filial" });
+      }
+
+      const permission = await storage.createUserPermission({
+        userId: req.params.userId,
+        filialId,
+      });
+      
+      await logAudit(req, "ADICIONAR_PERMISSAO_USUARIO", "user_permissions", permission.id, null, permission);
+      res.status(201).json(permission);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // Delete a user permission
+  app.delete("/api/user-permissions/:id", requireAuth, requireRole("gestor"), async (req, res, next) => {
+    try {
+      const currentUser = (req as any).user as User;
+      
+      // Get the permission to verify the gestor has access to that filial
+      const permission = await storage.getUserPermission(req.params.id);
+      
+      if (!permission) {
+        return res.status(404).json({ error: "Permissão não encontrada" });
+      }
+      
+      // Verify that the current gestor has access to the filial
+      const currentUserFilials = await storage.getUserFilialIds(currentUser.id);
+      if (!currentUserFilials.includes(permission.filialId)) {
+        return res.status(403).json({ error: "Você não tem permissão para remover acesso a esta filial" });
+      }
+
+      await storage.deleteUserPermission(req.params.id);
+      await logAudit(req, "REMOVER_PERMISSAO_USUARIO", "user_permissions", req.params.id, null, null);
+      res.status(204).send();
+    } catch (error) {
+      next(error);
+    }
+  });
+
   // ==================== Filiais Routes ====================
   
   app.get("/api/filiais", requireAuth, async (req, res, next) => {
