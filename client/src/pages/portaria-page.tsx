@@ -29,6 +29,7 @@ export default function PortariaPage() {
     tipoVeiculoCategoria: "cavalo_carreta" as "carro" | "moto" | "cavalo" | "cavalo_carreta",
     tipoProprietario: "terceiro" as "terceiro" | "agregado" | "frota",
     statusCarga: "" as "" | "carregado" | "descarregado" | "pernoite" | "manutencao",
+    tipoMotorista: "visitante" as "visitante" | "funcionario", // For carro/moto
     placaCavalo: "",
     placaCarreta: "",
     motorista: "",
@@ -41,6 +42,24 @@ export default function PortariaPage() {
     valor: "",
     observacoes: "",
   });
+
+  const isVeiculoLeve = formData.tipoVeiculoCategoria === "carro" || formData.tipoVeiculoCategoria === "moto";
+
+  // Clear heavy-vehicle fields when switching to light vehicle
+  useEffect(() => {
+    if (isVeiculoLeve) {
+      setFormData(prev => ({
+        ...prev,
+        placaCarreta: "",
+        transportadora: "",
+        cliente: "",
+        doca: "",
+        valor: "",
+        statusCarga: "",
+        multi: false,
+      }));
+    }
+  }, [isVeiculoLeve]);
 
   const { data: veiculos, isLoading: loadingVeiculos } = useQuery<Veiculo[]>({
     queryKey: ["/api/veiculos", filialId],
@@ -64,20 +83,43 @@ export default function PortariaPage() {
         filialId,
         situacao: "aguardando",
       };
-      // Convert valor to string (numeric) if present
-      if (data.valor && data.valor !== "") {
-        payload.valor = parseFloat(data.valor).toFixed(2);
-      } else {
-        delete payload.valor;
-      }
-      // Remove statusCarga if empty
-      if (!data.statusCarga) {
+      
+      // For carro/moto, set tipoProprietario based on tipoMotorista
+      const isLeve = data.tipoVeiculoCategoria === "carro" || data.tipoVeiculoCategoria === "moto";
+      if (isLeve) {
+        // For light vehicles, clear ALL heavy-vehicle fields to prevent leakage
+        delete payload.placaCarreta;
+        delete payload.transportadora;
+        delete payload.cliente;
+        delete payload.doca;
+        delete payload.multi;
         delete payload.statusCarga;
+        delete payload.valor;
+        // Use tipoMotorista to determine observacoes context
+        payload.observacoes = `Tipo: ${data.tipoMotorista === "visitante" ? "Visitante" : "Funcionário"}${data.observacoes ? ` - ${data.observacoes}` : ""}`;
+        // Set a default tipoProprietario for light vehicles
+        payload.tipoProprietario = "terceiro";
+      } else {
+        // Convert valor to string (numeric) if present
+        if (data.valor && data.valor !== "") {
+          payload.valor = parseFloat(data.valor).toFixed(2);
+        } else {
+          delete payload.valor;
+        }
+        // Remove statusCarga if empty
+        if (!data.statusCarga) {
+          delete payload.statusCarga;
+        }
       }
+      
       // Remove vagaId if empty
       if (!data.vagaId || data.vagaId === "") {
         delete payload.vagaId;
       }
+      
+      // Clean up tipoMotorista as it's not in the schema
+      delete payload.tipoMotorista;
+      
       const res = await apiRequest("POST", "/api/veiculos", payload);
       return await res.json();
     },
@@ -92,6 +134,7 @@ export default function PortariaPage() {
         tipoVeiculoCategoria: "cavalo_carreta",
         tipoProprietario: "terceiro",
         statusCarga: "",
+        tipoMotorista: "visitante",
         placaCavalo: "",
         placaCarreta: "",
         motorista: "",
@@ -318,59 +361,82 @@ export default function PortariaPage() {
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-6">
-                {/* Tipo de Veículo e Proprietário */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="tipoVeiculoCategoria">Tipo de Veículo *</Label>
-                    <Select
-                      value={formData.tipoVeiculoCategoria}
-                      onValueChange={(value: any) => setFormData({ ...formData, tipoVeiculoCategoria: value })}
-                    >
-                      <SelectTrigger id="tipoVeiculoCategoria" data-testid="select-tipo-veiculo">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="carro">Carro</SelectItem>
-                        <SelectItem value="moto">Moto</SelectItem>
-                        <SelectItem value="cavalo">Cavalo (sem carreta)</SelectItem>
-                        <SelectItem value="cavalo_carreta">Cavalo + Carreta</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="tipoProprietario">Proprietário *</Label>
-                    <Select
-                      value={formData.tipoProprietario}
-                      onValueChange={(value: any) => setFormData({ ...formData, tipoProprietario: value })}
-                    >
-                      <SelectTrigger id="tipoProprietario" data-testid="select-tipo-proprietario">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="terceiro">Terceiro</SelectItem>
-                        <SelectItem value="agregado">Agregado</SelectItem>
-                        <SelectItem value="frota">Frota</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="statusCarga">Status da Carga</Label>
-                    <Select
-                      value={formData.statusCarga || undefined}
-                      onValueChange={(value: any) => setFormData({ ...formData, statusCarga: value || "" })}
-                    >
-                      <SelectTrigger id="statusCarga" data-testid="select-status-carga">
-                        <SelectValue placeholder="Não informado" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="carregado">Carregado</SelectItem>
-                        <SelectItem value="descarregado">Descarregado</SelectItem>
-                        <SelectItem value="pernoite">Pernoite</SelectItem>
-                        <SelectItem value="manutencao">Manutenção</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                {/* Tipo de Veículo */}
+                <div className="space-y-2">
+                  <Label htmlFor="tipoVeiculoCategoria">Tipo de Veículo *</Label>
+                  <Select
+                    value={formData.tipoVeiculoCategoria}
+                    onValueChange={(value: any) => setFormData({ ...formData, tipoVeiculoCategoria: value })}
+                  >
+                    <SelectTrigger id="tipoVeiculoCategoria" data-testid="select-tipo-veiculo">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="carro">Carro</SelectItem>
+                      <SelectItem value="moto">Moto</SelectItem>
+                      <SelectItem value="cavalo">Cavalo (sem carreta)</SelectItem>
+                      <SelectItem value="cavalo_carreta">Cavalo + Carreta</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
+
+                {/* For Cavalo/Cavalo+Carreta - Show Proprietário and Status Carga */}
+                {!isVeiculoLeve && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="tipoProprietario">Proprietário *</Label>
+                      <Select
+                        value={formData.tipoProprietario}
+                        onValueChange={(value: any) => setFormData({ ...formData, tipoProprietario: value })}
+                      >
+                        <SelectTrigger id="tipoProprietario" data-testid="select-tipo-proprietario">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="terceiro">Terceiro</SelectItem>
+                          <SelectItem value="agregado">Agregado</SelectItem>
+                          <SelectItem value="frota">Frota</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="statusCarga">Status da Carga</Label>
+                      <Select
+                        value={formData.statusCarga || undefined}
+                        onValueChange={(value: any) => setFormData({ ...formData, statusCarga: value || "" })}
+                      >
+                        <SelectTrigger id="statusCarga" data-testid="select-status-carga">
+                          <SelectValue placeholder="Não informado" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="carregado">Carregado</SelectItem>
+                          <SelectItem value="descarregado">Descarregado</SelectItem>
+                          <SelectItem value="pernoite">Pernoite</SelectItem>
+                          <SelectItem value="manutencao">Manutenção</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                )}
+
+                {/* For Carro/Moto - Show Visitante/Funcionário */}
+                {isVeiculoLeve && (
+                  <div className="space-y-2">
+                    <Label htmlFor="tipoMotorista">Tipo *</Label>
+                    <Select
+                      value={formData.tipoMotorista}
+                      onValueChange={(value: any) => setFormData({ ...formData, tipoMotorista: value })}
+                    >
+                      <SelectTrigger id="tipoMotorista" data-testid="select-tipo-motorista">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="visitante">Visitante</SelectItem>
+                        <SelectItem value="funcionario">Funcionário</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
 
                 {/* Dados do Veículo */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -411,45 +477,53 @@ export default function PortariaPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="cpfMotorista">CPF Motorista</Label>
+                    <Label htmlFor="cpfMotorista">CPF Motorista {!isVeiculoLeve && "*"}</Label>
                     <Input
                       id="cpfMotorista"
                       data-testid="input-cpf-motorista"
                       placeholder="000.000.000-00"
                       value={formData.cpfMotorista}
                       onChange={(e) => setFormData({ ...formData, cpfMotorista: e.target.value })}
+                      required={!isVeiculoLeve}
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="transportadora">Transportadora</Label>
-                    <Input
-                      id="transportadora"
-                      data-testid="input-transportadora"
-                      placeholder="Nome da transportadora"
-                      value={formData.transportadora}
-                      onChange={(e) => setFormData({ ...formData, transportadora: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="cliente">Cliente</Label>
-                    <Input
-                      id="cliente"
-                      data-testid="input-cliente"
-                      placeholder="Nome do cliente"
-                      value={formData.cliente}
-                      onChange={(e) => setFormData({ ...formData, cliente: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="doca">Doca</Label>
-                    <Input
-                      id="doca"
-                      data-testid="input-doca"
-                      placeholder="Número da doca"
-                      value={formData.doca}
-                      onChange={(e) => setFormData({ ...formData, doca: e.target.value })}
-                    />
-                  </div>
+                  
+                  {/* Only for Cavalo/Cavalo+Carreta */}
+                  {!isVeiculoLeve && (
+                    <>
+                      <div className="space-y-2">
+                        <Label htmlFor="transportadora">Transportadora</Label>
+                        <Input
+                          id="transportadora"
+                          data-testid="input-transportadora"
+                          placeholder="Nome da transportadora"
+                          value={formData.transportadora}
+                          onChange={(e) => setFormData({ ...formData, transportadora: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="cliente">Cliente</Label>
+                        <Input
+                          id="cliente"
+                          data-testid="input-cliente"
+                          placeholder="Nome do cliente"
+                          value={formData.cliente}
+                          onChange={(e) => setFormData({ ...formData, cliente: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="doca">Doca</Label>
+                        <Input
+                          id="doca"
+                          data-testid="input-doca"
+                          placeholder="Número da doca"
+                          value={formData.doca}
+                          onChange={(e) => setFormData({ ...formData, doca: e.target.value })}
+                        />
+                      </div>
+                    </>
+                  )}
+                  
                   <div className="space-y-2">
                     <Label htmlFor="vagaId">Vaga</Label>
                     <Select
@@ -468,32 +542,38 @@ export default function PortariaPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="valor">Valor (R$)</Label>
-                    <Input
-                      id="valor"
-                      data-testid="input-valor"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      placeholder="0.00"
-                      value={formData.valor}
-                      onChange={(e) => setFormData({ ...formData, valor: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2 flex items-end">
-                    <label className="flex items-center space-x-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        id="multi"
-                        data-testid="checkbox-multi"
-                        checked={formData.multi}
-                        onChange={(e) => setFormData({ ...formData, multi: e.target.checked })}
-                        className="h-4 w-4 rounded border-input"
-                      />
-                      <Label htmlFor="multi" className="cursor-pointer">Multi</Label>
-                    </label>
-                  </div>
+                  
+                  {/* Only for Cavalo/Cavalo+Carreta */}
+                  {!isVeiculoLeve && (
+                    <>
+                      <div className="space-y-2">
+                        <Label htmlFor="valor">Valor (R$)</Label>
+                        <Input
+                          id="valor"
+                          data-testid="input-valor"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder="0.00"
+                          value={formData.valor}
+                          onChange={(e) => setFormData({ ...formData, valor: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-2 flex items-end">
+                        <label className="flex items-center space-x-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            id="multi"
+                            data-testid="checkbox-multi"
+                            checked={formData.multi}
+                            onChange={(e) => setFormData({ ...formData, multi: e.target.checked })}
+                            className="h-4 w-4 rounded border-input"
+                          />
+                          <Label htmlFor="multi" className="cursor-pointer">Multi</Label>
+                        </label>
+                      </div>
+                    </>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="observacoes">Observações</Label>
@@ -514,6 +594,7 @@ export default function PortariaPage() {
                       tipoVeiculoCategoria: "cavalo_carreta",
                       tipoProprietario: "terceiro",
                       statusCarga: "",
+                      tipoMotorista: "visitante",
                       placaCavalo: "",
                       placaCarreta: "",
                       motorista: "",
@@ -526,6 +607,7 @@ export default function PortariaPage() {
                       valor: "",
                       observacoes: "",
                     })}
+                    data-testid="button-limpar"
                   >
                     Limpar
                   </Button>
