@@ -7,6 +7,10 @@ import {
   vagas,
   visitantes,
   chamadas,
+  motoristas,
+  veiculosCadastro,
+  fornecedores,
+  statusCaminhao,
   auditLogs,
   refreshTokens,
   notifications,
@@ -24,6 +28,14 @@ import {
   type InsertVisitante,
   type Chamada,
   type InsertChamada,
+  type Motorista,
+  type InsertMotorista,
+  type VeiculoCadastro,
+  type InsertVeiculoCadastro,
+  type Fornecedor,
+  type InsertFornecedor,
+  type StatusCaminhao,
+  type InsertStatusCaminhao,
   type AuditLog,
   type InsertAuditLog,
   type RefreshToken,
@@ -89,6 +101,34 @@ export interface IStorage {
   getChamadasByFilial(filialId: string): Promise<Chamada[]>;
   createChamada(chamada: InsertChamada): Promise<Chamada>;
   updateChamada(id: string, data: Partial<Chamada>): Promise<Chamada>;
+
+  // Motorista methods
+  getMotorista(id: string): Promise<Motorista | undefined>;
+  getMotoristasByFilial(filialId: string): Promise<Motorista[]>;
+  createMotorista(motorista: InsertMotorista): Promise<Motorista>;
+  updateMotorista(id: string, data: Partial<Motorista>): Promise<Motorista>;
+  deleteMotorista(id: string): Promise<void>;
+
+  // VeiculoCadastro methods
+  getVeiculoCadastro(id: string): Promise<VeiculoCadastro | undefined>;
+  getVeiculosCadastroByFilial(filialId: string): Promise<VeiculoCadastro[]>;
+  createVeiculoCadastro(veiculo: InsertVeiculoCadastro): Promise<VeiculoCadastro>;
+  updateVeiculoCadastro(id: string, data: Partial<VeiculoCadastro>): Promise<VeiculoCadastro>;
+  deleteVeiculoCadastro(id: string): Promise<void>;
+
+  // Fornecedor methods
+  getFornecedor(id: string): Promise<Fornecedor | undefined>;
+  getFornecedoresByFilial(filialId: string): Promise<Fornecedor[]>;
+  createFornecedor(fornecedor: InsertFornecedor): Promise<Fornecedor>;
+  updateFornecedor(id: string, data: Partial<Fornecedor>): Promise<Fornecedor>;
+  deleteFornecedor(id: string): Promise<void>;
+
+  // StatusCaminhao methods
+  getStatusCaminhao(id: string): Promise<StatusCaminhao | undefined>;
+  getStatusCaminhaoByFilial(filialId: string): Promise<StatusCaminhao[]>;
+  createStatusCaminhao(status: InsertStatusCaminhao): Promise<StatusCaminhao>;
+  updateStatusCaminhao(id: string, data: Partial<StatusCaminhao>): Promise<StatusCaminhao>;
+  deleteStatusCaminhao(id: string): Promise<void>;
 
   // Notification methods
   getNotification(id: string): Promise<Notification | undefined>;
@@ -340,6 +380,122 @@ export class DatabaseStorage implements IStorage {
       .where(eq(chamadas.id, id))
       .returning();
     return c;
+  }
+
+  // Motorista methods
+  async getMotorista(id: string): Promise<Motorista | undefined> {
+    const [motorista] = await db.select().from(motoristas).where(eq(motoristas.id, id));
+    return motorista || undefined;
+  }
+
+  async getMotoristasByFilial(filialId: string): Promise<Motorista[]> {
+    return await db.select().from(motoristas)
+      .where(eq(motoristas.filialId, filialId))
+      .orderBy(desc(motoristas.createdAt));
+  }
+
+  async createMotorista(motorista: InsertMotorista): Promise<Motorista> {
+    const [m] = await db.insert(motoristas).values(motorista).returning();
+    return m;
+  }
+
+  async updateMotorista(id: string, data: Partial<Motorista>): Promise<Motorista> {
+    const [m] = await db.update(motoristas)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(motoristas.id, id))
+      .returning();
+    return m;
+  }
+
+  async deleteMotorista(id: string): Promise<void> {
+    await db.delete(motoristas).where(eq(motoristas.id, id));
+  }
+
+  // VeiculoCadastro methods
+  async getVeiculoCadastro(id: string): Promise<VeiculoCadastro | undefined> {
+    const [veiculo] = await db.select().from(veiculosCadastro).where(eq(veiculosCadastro.id, id));
+    return veiculo || undefined;
+  }
+
+  async getVeiculosCadastroByFilial(filialId: string): Promise<VeiculoCadastro[]> {
+    return await db.select().from(veiculosCadastro)
+      .where(eq(veiculosCadastro.filialId, filialId))
+      .orderBy(desc(veiculosCadastro.createdAt));
+  }
+
+  async createVeiculoCadastro(veiculo: InsertVeiculoCadastro): Promise<VeiculoCadastro> {
+    const [v] = await db.insert(veiculosCadastro).values(veiculo).returning();
+    return v;
+  }
+
+  async updateVeiculoCadastro(id: string, data: Partial<VeiculoCadastro>): Promise<VeiculoCadastro> {
+    const [v] = await db.update(veiculosCadastro)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(veiculosCadastro.id, id))
+      .returning();
+    return v;
+  }
+
+  async deleteVeiculoCadastro(id: string): Promise<void> {
+    await db.delete(veiculosCadastro).where(eq(veiculosCadastro.id, id));
+  }
+
+  // Fornecedor methods
+  async getFornecedor(id: string): Promise<Fornecedor | undefined> {
+    const [fornecedor] = await db.select().from(fornecedores).where(eq(fornecedores.id, id));
+    return fornecedor || undefined;
+  }
+
+  async getFornecedoresByFilial(filialId: string): Promise<Fornecedor[]> {
+    return await db.select().from(fornecedores)
+      .where(eq(fornecedores.filialId, filialId))
+      .orderBy(desc(fornecedores.createdAt));
+  }
+
+  async createFornecedor(fornecedor: InsertFornecedor): Promise<Fornecedor> {
+    const [f] = await db.insert(fornecedores).values(fornecedor).returning();
+    return f;
+  }
+
+  async updateFornecedor(id: string, data: Partial<Fornecedor>): Promise<Fornecedor> {
+    const [f] = await db.update(fornecedores)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(fornecedores.id, id))
+      .returning();
+    return f;
+  }
+
+  async deleteFornecedor(id: string): Promise<void> {
+    await db.delete(fornecedores).where(eq(fornecedores.id, id));
+  }
+
+  // StatusCaminhao methods
+  async getStatusCaminhao(id: string): Promise<StatusCaminhao | undefined> {
+    const [status] = await db.select().from(statusCaminhao).where(eq(statusCaminhao.id, id));
+    return status || undefined;
+  }
+
+  async getStatusCaminhaoByFilial(filialId: string): Promise<StatusCaminhao[]> {
+    return await db.select().from(statusCaminhao)
+      .where(eq(statusCaminhao.filialId, filialId))
+      .orderBy(statusCaminhao.ordem, desc(statusCaminhao.createdAt));
+  }
+
+  async createStatusCaminhao(status: InsertStatusCaminhao): Promise<StatusCaminhao> {
+    const [s] = await db.insert(statusCaminhao).values(status).returning();
+    return s;
+  }
+
+  async updateStatusCaminhao(id: string, data: Partial<StatusCaminhao>): Promise<StatusCaminhao> {
+    const [s] = await db.update(statusCaminhao)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(statusCaminhao.id, id))
+      .returning();
+    return s;
+  }
+
+  async deleteStatusCaminhao(id: string): Promise<void> {
+    await db.delete(statusCaminhao).where(eq(statusCaminhao.id, id));
   }
 
   // Notification methods
