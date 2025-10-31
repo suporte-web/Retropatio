@@ -22,7 +22,14 @@ export function useWebSocket() {
 
     try {
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const wsUrl = `${protocol}//${window.location.host}/ws`;
+      const filialId = localStorage.getItem("selected_filial");
+      
+      if (!filialId) {
+        console.log("Cannot connect WebSocket: no filial selected");
+        return;
+      }
+      
+      const wsUrl = `${protocol}//${window.location.host}/ws?filialId=${encodeURIComponent(filialId)}`;
       
       console.log("Connecting to WebSocket:", wsUrl);
       const ws = new WebSocket(wsUrl);
@@ -37,11 +44,16 @@ export function useWebSocket() {
           const message: WebSocketMessage = JSON.parse(event.data);
           console.log("WebSocket message received:", message.type, message.data);
 
+          // Get current filialId for query invalidation
+          const currentFilialId = localStorage.getItem("selected_filial");
+
           // Invalidate relevant queries based on event type
           switch (message.type) {
             case "veiculo_entrada":
             case "veiculo_saida":
+              queryClient.invalidateQueries({ queryKey: ["/api/veiculos", currentFilialId] });
               queryClient.invalidateQueries({ queryKey: ["/api/veiculos"] });
+              queryClient.invalidateQueries({ queryKey: ["/api/vagas", currentFilialId] });
               queryClient.invalidateQueries({ queryKey: ["/api/vagas"] });
               
               if (message.type === "veiculo_entrada") {
@@ -53,10 +65,12 @@ export function useWebSocket() {
               break;
 
             case "vaga_updated":
+              queryClient.invalidateQueries({ queryKey: ["/api/vagas", currentFilialId] });
               queryClient.invalidateQueries({ queryKey: ["/api/vagas"] });
               break;
 
             case "visitante_novo":
+              queryClient.invalidateQueries({ queryKey: ["/api/visitantes", currentFilialId] });
               queryClient.invalidateQueries({ queryKey: ["/api/visitantes"] });
               toast({
                 title: "Novo Visitante",
@@ -65,12 +79,23 @@ export function useWebSocket() {
               break;
 
             case "visitante_aprovado":
+              queryClient.invalidateQueries({ queryKey: ["/api/visitantes", currentFilialId] });
+              queryClient.invalidateQueries({ queryKey: ["/api/visitantes"] });
+              toast({
+                title: "Visitante Aprovado ✓",
+                description: `${message.data.nome} foi aprovado para entrada`,
+                duration: 5000,
+              });
+              break;
+
             case "visitante_entrada":
             case "visitante_saida":
+              queryClient.invalidateQueries({ queryKey: ["/api/visitantes", currentFilialId] });
               queryClient.invalidateQueries({ queryKey: ["/api/visitantes"] });
               break;
 
             case "chamada_nova":
+              queryClient.invalidateQueries({ queryKey: ["/api/chamadas", currentFilialId] });
               queryClient.invalidateQueries({ queryKey: ["/api/chamadas"] });
               toast({
                 title: "Nova Chamada",
@@ -80,6 +105,7 @@ export function useWebSocket() {
               break;
 
             case "chamada_atendida":
+              queryClient.invalidateQueries({ queryKey: ["/api/chamadas", currentFilialId] });
               queryClient.invalidateQueries({ queryKey: ["/api/chamadas"] });
               break;
 

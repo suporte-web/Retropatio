@@ -370,8 +370,8 @@ export function registerRoutes(app: Express): Server {
       
       await logAudit(req, "REGISTRAR_ENTRADA_VEICULO", "veiculos", veiculo.id, null, veiculo);
       
-      // Broadcast to WebSocket clients
-      broadcastToClients({ type: "veiculo_entrada", data: veiculo });
+      // Broadcast to WebSocket clients (only to this filial)
+      broadcastToClients({ type: "veiculo_entrada", data: veiculo }, veiculo.filialId);
       
       res.status(201).json(veiculo);
     } catch (error) {
@@ -396,8 +396,8 @@ export function registerRoutes(app: Express): Server {
       
       await logAudit(req, "REGISTRAR_SAIDA_VEICULO", "veiculos", veiculo.id, veiculoBefore, veiculo);
       
-      // Broadcast to WebSocket clients
-      broadcastToClients({ type: "veiculo_saida", data: veiculo });
+      // Broadcast to WebSocket clients (only to this filial)
+      broadcastToClients({ type: "veiculo_saida", data: veiculo }, veiculo.filialId);
       
       res.json(veiculo);
     } catch (error) {
@@ -452,8 +452,8 @@ export function registerRoutes(app: Express): Server {
       
       await logAudit(req, "ATUALIZAR_VAGA", "vagas", vaga.id, vagaBefore, vaga);
       
-      // Broadcast to WebSocket clients
-      broadcastToClients({ type: "vaga_updated", data: vaga });
+      // Broadcast to WebSocket clients (only to this filial)
+      broadcastToClients({ type: "vaga_updated", data: vaga }, vaga.filialId);
       
       res.json(vaga);
     } catch (error) {
@@ -484,8 +484,8 @@ export function registerRoutes(app: Express): Server {
       
       await logAudit(req, "CRIAR_VISITANTE", "visitantes", visitante.id, null, visitante);
       
-      // Broadcast to WebSocket clients
-      broadcastToClients({ type: "visitante_novo", data: visitante });
+      // Broadcast to WebSocket clients (only to this filial)
+      broadcastToClients({ type: "visitante_novo", data: visitante }, visitante.filialId);
       
       // Create notification for gestores of this filial if visitor is awaiting approval
       if (visitante.status === "aguardando") {
@@ -544,8 +544,8 @@ export function registerRoutes(app: Express): Server {
       
       await logAudit(req, "APROVAR_VISITANTE", "visitantes", visitante.id, visitanteBefore, visitante);
       
-      // Broadcast to WebSocket clients
-      broadcastToClients({ type: "visitante_aprovado", data: visitante });
+      // Broadcast to WebSocket clients (only to this filial)
+      broadcastToClients({ type: "visitante_aprovado", data: visitante }, visitante.filialId);
       
       res.json(visitante);
     } catch (error) {
@@ -573,8 +573,8 @@ export function registerRoutes(app: Express): Server {
       
       await logAudit(req, "REGISTRAR_ENTRADA_VISITANTE", "visitantes", visitante.id, visitanteBefore, visitante);
       
-      // Broadcast to WebSocket clients
-      broadcastToClients({ type: "visitante_entrada", data: visitante });
+      // Broadcast to WebSocket clients (only to this filial)
+      broadcastToClients({ type: "visitante_entrada", data: visitante }, visitante.filialId);
       
       res.json(visitante);
     } catch (error) {
@@ -602,8 +602,8 @@ export function registerRoutes(app: Express): Server {
       
       await logAudit(req, "REGISTRAR_SAIDA_VISITANTE", "visitantes", visitante.id, visitanteBefore, visitante);
       
-      // Broadcast to WebSocket clients
-      broadcastToClients({ type: "visitante_saida", data: visitante });
+      // Broadcast to WebSocket clients (only to this filial)
+      broadcastToClients({ type: "visitante_saida", data: visitante }, visitante.filialId);
       
       res.json(visitante);
     } catch (error) {
@@ -636,8 +636,8 @@ export function registerRoutes(app: Express): Server {
       
       await logAudit(req, "CRIAR_CHAMADA", "chamadas", chamada.id, null, chamada);
       
-      // Broadcast to WebSocket clients
-      broadcastToClients({ type: "chamada_nova", data: chamada });
+      // Broadcast to WebSocket clients (only to this filial)
+      broadcastToClients({ type: "chamada_nova", data: chamada }, chamada.filialId);
       
       res.status(201).json(chamada);
     } catch (error) {
@@ -667,8 +667,8 @@ export function registerRoutes(app: Express): Server {
       
       await logAudit(req, "ATENDER_CHAMADA", "chamadas", chamada.id, chamadaBefore, chamada);
       
-      // Broadcast to WebSocket clients
-      broadcastToClients({ type: "chamada_atendida", data: chamada });
+      // Broadcast to WebSocket clients (only to this filial)
+      broadcastToClients({ type: "chamada_atendida", data: chamada }, chamada.filialId);
       
       res.json(chamada);
     } catch (error) {
@@ -1178,15 +1178,25 @@ export function registerRoutes(app: Express): Server {
 
   // ==================== WebSocket Setup ====================
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
-  const clients = new Set<WebSocket>();
+  const clients = new Map<WebSocket, string>(); // Map WebSocket to filialId
 
-  wss.on('connection', (ws) => {
-    clients.add(ws);
-    console.log('WebSocket client connected. Total clients:', clients.size);
+  wss.on('connection', (ws, req) => {
+    // Extract filialId from query parameter
+    const url = new URL(req.url || '', `http://${req.headers.host}`);
+    const filialId = url.searchParams.get('filialId');
+
+    if (!filialId) {
+      console.log('WebSocket connection rejected: missing filialId');
+      ws.close(1008, 'Missing filialId parameter');
+      return;
+    }
+
+    clients.set(ws, filialId);
+    console.log(`WebSocket client connected for filial ${filialId}. Total clients: ${clients.size}`);
 
     ws.on('close', () => {
       clients.delete(ws);
-      console.log('WebSocket client disconnected. Total clients:', clients.size);
+      console.log(`WebSocket client disconnected. Total clients: ${clients.size}`);
     });
 
     ws.on('error', (error) => {
@@ -1195,11 +1205,15 @@ export function registerRoutes(app: Express): Server {
     });
   });
 
-  function broadcastToClients(message: any) {
+  // Broadcast to all clients or filter by filialId
+  function broadcastToClients(message: any, targetFilialId?: string) {
     const data = JSON.stringify(message);
-    clients.forEach((client) => {
+    clients.forEach((clientFilialId, client) => {
       if (client.readyState === WebSocket.OPEN) {
-        client.send(data);
+        // If targetFilialId is specified, only send to matching clients
+        if (!targetFilialId || clientFilialId === targetFilialId) {
+          client.send(data);
+        }
       }
     });
   }

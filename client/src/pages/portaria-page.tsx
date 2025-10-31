@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,17 +7,22 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Truck, LogOut, Plus, Loader2, Clock } from "lucide-react";
+import { Truck, LogOut, Plus, Loader2, Clock, UserCheck, ArrowLeft } from "lucide-react";
 import { StatusBadge } from "@/components/status-badge";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import type { Veiculo, Vaga } from "@shared/schema";
+import { useLocation } from "wouter";
+import type { Veiculo, Vaga, Visitante } from "@shared/schema";
+
+type OperationMode = "selection" | "veiculo";
 
 export default function PortariaPage() {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const filialId = localStorage.getItem("selected_filial");
+  const [operationMode, setOperationMode] = useState<OperationMode>("selection");
   const [activeTab, setActiveTab] = useState("entrada");
 
   const [formData, setFormData] = useState({
@@ -44,6 +49,11 @@ export default function PortariaPage() {
 
   const { data: vagas } = useQuery<Vaga[]>({
     queryKey: ["/api/vagas", filialId],
+    enabled: !!filialId,
+  });
+
+  const { data: visitantes } = useQuery<Visitante[]>({
+    queryKey: ["/api/visitantes", filialId],
     enabled: !!filialId,
   });
 
@@ -135,12 +145,124 @@ export default function PortariaPage() {
   const vagasLivres = vagas?.filter((v) => v.status === "livre").length || 0;
   const vagasOcupadas = vagas?.filter((v) => v.status === "ocupada").length || 0;
 
+  const visitantesAguardando = visitantes?.filter((v) => v.status === "aguardando").length || 0;
+  const visitantesAprovados = visitantes?.filter((v) => v.status === "aprovado").length || 0;
+
+  // Selection Cards View
+  if (operationMode === "selection") {
+    return (
+      <div className="p-4 md:p-6 space-y-4 md:space-y-6 max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="text-center space-y-2">
+          <h1 className="text-2xl md:text-3xl font-bold text-foreground">Controle de Portaria</h1>
+          <p className="text-sm md:text-base text-muted-foreground">Selecione uma operação para começar</p>
+        </div>
+
+        {/* Selection Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto mt-8">
+          {/* Veículos Card */}
+          <Card
+            className="cursor-pointer transition-all hover-elevate active-elevate-2 border-2"
+            onClick={() => setOperationMode("veiculo")}
+            data-testid="card-select-veiculo"
+          >
+            <CardHeader className="text-center space-y-4 p-8">
+              <div className="flex justify-center">
+                <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-primary/10">
+                  <Truck className="h-12 w-12 text-primary" />
+                </div>
+              </div>
+              <div>
+                <CardTitle className="text-2xl">Veículos</CardTitle>
+                <CardDescription className="mt-2">
+                  Registrar entrada e saída de veículos
+                </CardDescription>
+              </div>
+            </CardHeader>
+            <CardContent className="text-center pb-8">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-muted-foreground">Ativos</p>
+                  <p className="text-2xl font-bold text-foreground">{veiculosAtivos?.length || 0}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Hoje</p>
+                  <p className="text-2xl font-bold text-foreground">{veiculosHoje?.length || 0}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Visitantes Card */}
+          <Card
+            className="cursor-pointer transition-all hover-elevate active-elevate-2 border-2"
+            onClick={() => setLocation("/visitantes")}
+            data-testid="card-select-visitante"
+          >
+            <CardHeader className="text-center space-y-4 p-8">
+              <div className="flex justify-center">
+                <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-emerald-500/10">
+                  <UserCheck className="h-12 w-12 text-emerald-600" />
+                </div>
+              </div>
+              <div>
+                <CardTitle className="text-2xl">Visitantes</CardTitle>
+                <CardDescription className="mt-2">
+                  Gerenciar visitantes e prestadores
+                </CardDescription>
+              </div>
+            </CardHeader>
+            <CardContent className="text-center pb-8">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-muted-foreground">Aguardando</p>
+                  <p className="text-2xl font-bold text-amber-600">{visitantesAguardando}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Aprovados</p>
+                  <p className="text-2xl font-bold text-emerald-600">{visitantesAprovados}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Quick Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-2 gap-3 md:gap-4 max-w-2xl mx-auto mt-8">
+          <Card>
+            <CardHeader className="p-4 md:pb-2">
+              <CardDescription className="text-xs md:text-sm">Vagas Livres</CardDescription>
+              <CardTitle className="text-2xl md:text-3xl text-emerald-600">{vagasLivres}</CardTitle>
+            </CardHeader>
+          </Card>
+          <Card>
+            <CardHeader className="p-4 md:pb-2">
+              <CardDescription className="text-xs md:text-sm">Vagas Ocupadas</CardDescription>
+              <CardTitle className="text-2xl md:text-3xl text-rose-600">{vagasOcupadas}</CardTitle>
+            </CardHeader>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  // Veículos View
   return (
     <div className="p-4 md:p-6 space-y-4 md:space-y-6 max-w-7xl mx-auto">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl md:text-3xl font-bold text-foreground">Controle de Portaria</h1>
-        <p className="text-sm md:text-base text-muted-foreground">Gerencie entrada e saída de veículos</p>
+      {/* Header with Back Button */}
+      <div className="flex items-center gap-4">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setOperationMode("selection")}
+          data-testid="button-back-to-selection"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold text-foreground">Controle de Veículos</h1>
+          <p className="text-sm md:text-base text-muted-foreground">Gerencie entrada e saída de veículos</p>
+        </div>
       </div>
 
       {/* Stats */}
