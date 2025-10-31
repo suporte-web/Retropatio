@@ -278,6 +278,92 @@ export const notificationsRelations = relations(notifications, ({ one }) => ({
   }),
 }));
 
+// Motoristas (Drivers)
+export const motoristas = pgTable("motoristas", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  filialId: varchar("filial_id").notNull().references(() => filiais.id),
+  nome: text("nome").notNull(),
+  cpf: text("cpf").notNull(),
+  tipo: tipoProprietarioEnum("tipo").notNull().default("terceiro"), // terceiro, agregado, frota
+  ativo: boolean("ativo").notNull().default(true),
+  telefone: text("telefone"),
+  observacoes: text("observacoes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const motoristasRelations = relations(motoristas, ({ one }) => ({
+  filial: one(filiais, {
+    fields: [motoristas.filialId],
+    references: [filiais.id],
+  }),
+}));
+
+// Veículos Cadastrados (Pre-registered Vehicles)
+export const veiculosCadastro = pgTable("veiculos_cadastro", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  filialId: varchar("filial_id").notNull().references(() => filiais.id),
+  tipo: tipoVeiculoCategoriaEnum("tipo").notNull().default("cavalo_carreta"),
+  placa: text("placa").notNull(),
+  statusCarga: statusCargaEnum("status_carga"),
+  ativo: boolean("ativo").notNull().default(true),
+  modelo: text("modelo"),
+  marca: text("marca"),
+  ano: integer("ano"),
+  observacoes: text("observacoes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const veiculosCadastroRelations = relations(veiculosCadastro, ({ one }) => ({
+  filial: one(filiais, {
+    fields: [veiculosCadastro.filialId],
+    references: [filiais.id],
+  }),
+}));
+
+// Fornecedores (Suppliers)
+export const fornecedores = pgTable("fornecedores", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  filialId: varchar("filial_id").notNull().references(() => filiais.id),
+  nome: text("nome").notNull(),
+  cnpj: text("cnpj").notNull(),
+  ativo: boolean("ativo").notNull().default(true),
+  contato: text("contato"),
+  telefone: text("telefone"),
+  email: text("email"),
+  endereco: text("endereco"),
+  observacoes: text("observacoes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const fornecedoresRelations = relations(fornecedores, ({ one }) => ({
+  filial: one(filiais, {
+    fields: [fornecedores.filialId],
+    references: [filiais.id],
+  }),
+}));
+
+// Status de Caminhão (Truck Status)
+export const statusCaminhao = pgTable("status_caminhao", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  filialId: varchar("filial_id").notNull().references(() => filiais.id),
+  descricao: text("descricao").notNull(),
+  cor: text("cor").notNull().default("#3B82F6"), // Hex color for visual differentiation
+  ativo: boolean("ativo").notNull().default(true),
+  ordem: integer("ordem").notNull().default(0), // For sorting
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const statusCaminhaoRelations = relations(statusCaminhao, ({ one }) => ({
+  filial: one(filiais, {
+    fields: [statusCaminhao.filialId],
+    references: [filiais.id],
+  }),
+}));
+
 // Refresh Tokens
 export const refreshTokens = pgTable("refresh_tokens", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -361,6 +447,10 @@ export const insertNotificationSchema = createInsertSchema(notifications).omit({
   createdAt: true,
   readAt: true,
 });
+export const insertMotoristaSchema = createInsertSchema(motoristas).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertVeiculoCadastroSchema = createInsertSchema(veiculosCadastro).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertFornecedorSchema = createInsertSchema(fornecedores).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertStatusCaminhaoSchema = createInsertSchema(statusCaminhao).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({ id: true, createdAt: true });
 export const insertRefreshTokenSchema = createInsertSchema(refreshTokens).omit({ id: true, createdAt: true });
 
@@ -389,6 +479,10 @@ export type Chamada = typeof chamadas.$inferSelect;
 export type Checklist = typeof checklists.$inferSelect;
 export type ChecklistItem = typeof checklistItems.$inferSelect;
 export type Notification = typeof notifications.$inferSelect;
+export type Motorista = typeof motoristas.$inferSelect;
+export type VeiculoCadastro = typeof veiculosCadastro.$inferSelect;
+export type Fornecedor = typeof fornecedores.$inferSelect;
+export type StatusCaminhao = typeof statusCaminhao.$inferSelect;
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type RefreshToken = typeof refreshTokens.$inferSelect;
 
@@ -403,5 +497,9 @@ export type InsertChamada = z.infer<typeof insertChamadaSchema>;
 export type InsertChecklist = z.infer<typeof insertChecklistSchema>;
 export type InsertChecklistItem = z.infer<typeof insertChecklistItemSchema>;
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+export type InsertMotorista = z.infer<typeof insertMotoristaSchema>;
+export type InsertVeiculoCadastro = z.infer<typeof insertVeiculoCadastroSchema>;
+export type InsertFornecedor = z.infer<typeof insertFornecedorSchema>;
+export type InsertStatusCaminhao = z.infer<typeof insertStatusCaminhaoSchema>;
 export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
 export type InsertRefreshToken = z.infer<typeof insertRefreshTokenSchema>;
