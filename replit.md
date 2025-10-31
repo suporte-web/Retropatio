@@ -1,390 +1,99 @@
 # APP RETROPATIO - Sistema de Controle de Pátio e Portaria
 
-## Visão Geral
+## Overview
 
-Sistema web completo para controle de entrada e saída de veículos e visitantes em pátios logísticos, com perfis de usuário RBAC e operação multi-filial.
+A comprehensive web-based system designed for managing vehicle and visitor entry/exit in logistics yards. It features RBAC user profiles, multi-branch operations, real-time tracking, and detailed reporting. The system aims to enhance operational efficiency and security in logistics environments.
 
-## Arquitetura
+## User Preferences
 
-### Stack Tecnológico
-- **Frontend**: React + TypeScript + Tailwind CSS + Shadcn UI
-- **Backend**: Express.js + TypeScript
-- **Banco de Dados**: PostgreSQL (Neon)
-- **Real-time**: WebSockets (ws)
-- **Autenticação**: Passport.js + Session-based
-- **ORM**: Drizzle ORM
+- I prefer simple language and clear explanations.
+- I like functional programming paradigms where appropriate.
+- I want an iterative development approach, with frequent updates and feedback loops.
+- Please ask for my approval before implementing major architectural changes or refactoring large portions of the codebase.
+- I prefer detailed explanations for complex features or decisions.
+- Do not make changes to the `shared/schema.ts` file without explicit instruction.
+- Ensure all new features include `data-testids` for E2E testing.
 
-### Estrutura Multi-tenant
-- Cada filial tem isolamento lógico de dados
-- Schema PostgreSQL único com field `filialId`
-- 3 filiais configuradas: Guarulhos, Araraquara, Costeira
+## System Architecture
 
-## Perfis de Usuário (RBAC)
+The system is built on a modern full-stack architecture.
 
-### 1. Porteiro
-- Registro de entrada e saída de veículos
-- Visualização do mapa de vagas em tempo real
-- Gestão de visitantes (cadastro, aprovação, entrada/saída)
-- Atendimento de chamadas de motorista
+- **Frontend**: React, TypeScript, Tailwind CSS, Shadcn UI for a consistent and responsive design supporting dark mode.
+- **Backend**: Express.js, TypeScript.
+- **Database**: PostgreSQL (Neon) with Drizzle ORM.
+- **Real-time Communication**: WebSockets (`ws`) for instant updates on vehicle movements, visitor status, and calls.
+- **Authentication**: Session-based authentication using Passport.js, JWTs with access and refresh tokens, scrypt for password hashing, and brute-force protection.
+- **Authorization**: Role-Based Access Control (RBAC) with "Porteiro" (Gatekeeper), "Cliente" (Client), and "Gestor/Admin" (Manager/Admin) roles. Multi-tenant architecture with logical data isolation per branch using a `filialId` field.
+- **UI/UX**: Emphasis on readability with the Inter font, clear hierarchy, and a professional color scheme (Primary: Azul #3B82F6, Success: Green, Warning: Yellow/Orange, Danger: Red).
+- **Core Features**:
+    - **Portaria Control**: Vehicle entry/exit registration with various categories (Carro, Moto, Cavalo, Cavalo + Carreta), owner types (Terceiro, Agregado, Frota), and load statuses (Carregado, Descarregado, Pernoite, Manutenção). Conditional fields and mobile-responsive forms for self-registration.
+    - **Vaga Map**: Real-time visualization of 20 parking spots per branch, showing Free/Occupied status.
+    - **Visitor Management**: Registration, approval workflow, and entry/exit tracking for visitors and service providers.
+    - **Call System**: Driver notification and status tracking (Pendente, Atendida, Cancelada).
+    - **Reporting**: Movimentation reports with filters, CSV and PDF export, and a full audit history.
+    - **Audit System**: Comprehensive logging of all critical actions, including user, timestamp, branch, action type, affected entity, before/after data (JSON), IP, and User Agent.
+    - **Notification System**: Real-time notifications for managers via polling, with unread counts, status management (read/unread), and branch-specific isolation.
+    - **Administrative Modules**: CRUD functionalities for Drivers, Registered Vehicles, Suppliers, and Custom Truck Statuses, all with multi-tenant isolation, Zod validation, and automatic audit logging.
+    - **Analytical Dashboard**: Bar charts for daily movements, pie charts for status distribution, and average stay time metrics.
+    - **Digital Checklist System**: Database schema created for managing checklists per vehicle and individual items, supporting various types and photo uploads (under development).
 
-### 2. Cliente
-- Dashboard com visão geral das operações
-- Relatórios de movimentação com filtros
-- Exportação de dados (CSV)
-- Visualização de status em tempo real
+## External Dependencies
 
-### 3. Gestor/Admin
-- CRUD completo de usuários
-- CRUD completo de filiais
-- Gestão de permissões por filial
-- Acesso a logs de auditoria
-- Visão consolidada de todas as filiais
+- **PostgreSQL (Neon)**: Primary database for all application data.
+- **WebSockets (`ws`)**: Used for real-time communication and updates across the application.
+- **Passport.js**: Authentication middleware.
+- **Drizzle ORM**: Object-Relational Mapper for database interactions.
+- **React Query**: Used for data fetching, caching, and synchronization in the frontend.
+- **Zod**: Schema validation library for both frontend and backend.
+- **date-fns**: Library for date formatting (specifically PT-BR locale).
+- **Recharts**: Charting library used for analytical dashboard visualizations.
 
-## Funcionalidades Principais
+## Multi-Tenant Security Architecture (Updated October 2025)
 
-### Controle de Portaria
-- Registro de entrada de veículos com suporte a múltiplos tipos:
-  - **Categorias**: Carro, Moto, Cavalo, Cavalo + Carreta
-  - **Tipo de Proprietário**: Terceiro, Agregado, Frota
-  - **Status da Carga**: Carregado, Descarregado, Pernoite, Manutenção (opcional)
-  - **Campos adicionais**: Multi (boolean), Valor (numeric)
-- Campos condicionais: placa carreta aparece apenas para tipo "Cavalo + Carreta"
-- Formulário responsivo mobile para auto-registro de motoristas
-- Atribuição de vagas (opcional)
-- Controle de situação do veículo (aguardando, docado, carregando, descarregando, finalizado)
-- Registro de saída com liberação automática da vaga
-- Atualização em tempo real via WebSocket
+The system implements comprehensive multi-tenant data isolation across all routes:
 
-### Mapa de Vagas
-- Visualização em tempo real de todas as vagas
-- Status: Livre/Ocupada
-- Atualização via WebSocket
-- 20 vagas por filial
+### Security Layers
+1. **Authentication**: JWT-based session authentication (requireAuth middleware)
+2. **Authorization**: Role-based access control (requireRole middleware)
+3. **Filial Permission Validation**: requireFilial middleware validates X-Filial header against user's authorized filials
+4. **Header-Based Multi-Tenancy**: All GET routes use validated X-Filial header instead of URL parameters
+5. **Entity-Level Verification**: All PATCH/DELETE routes verify entity.filialId matches req.filialId before allowing modifications
+6. **Filial Reassignment Prevention**: All PATCH routes strip filialId from req.body to prevent cross-tenant data manipulation
 
-### Gestão de Visitantes
-- Cadastro de visitantes e prestadores de serviço
-- Fluxo de aprovação
-- Status: Aguardando, Aprovado, Dentro, Saiu
-- Controle de entrada e saída
+### API Security Pattern
+All tenant-scoped routes follow this pattern:
+```typescript
+app.get("/api/entity", requireAuth, requireRole("role"), requireFilial, async (req, res) => {
+  const filialId = (req as any).filialId; // Validated by middleware
+  const data = await storage.getByFilial(filialId);
+  res.json(data);
+});
 
-### Sistema de Chamadas
-- Notificações de motorista
-- Status: Pendente, Atendida, Cancelada
-- Atualização em tempo real via WebSocket
-
-### Relatórios
-- Filtros por:
-  - Período (data início/fim)
-  - Cliente
-  - Transportadora
-  - Situação do veículo
-- Exportação em CSV
-- Histórico completo de movimentações
-
-### Auditoria
-- Registro completo de todas as ações
-- Informações capturadas:
-  - Usuário que executou a ação
-  - Data/hora
-  - Filial
-  - Tipo de ação
-  - Entidade afetada
-  - Dados antes e depois (JSON)
-  - IP e User Agent
-
-### Sistema de Notificações
-- Notificações em tempo real para gestores
-- Polling automático a cada 10 segundos
-- Badge com contador de não lidas no header
-- Dropdown com lista de notificações
-- Tipos de notificação:
-  - `visitante_aprovacao`: Novo visitante aguardando aprovação
-  - (Extensível para outros tipos no futuro)
-- Segurança:
-  - Isolamento por filial: apenas gestores com permissão na filial recebem notificações
-  - Ownership verification: usuários só podem acessar suas próprias notificações
-  - Autenticação via Bearer token
-- Interações:
-  - Clicar na notificação marca como lida e redireciona para ação relevante
-  - Botão para marcar todas como lidas
-  - Deletar notificações individualmente
-- Status: Lida/Não lida
-
-## WebSocket - Real-time
-
-### Eventos Broadcast
-- `veiculo_entrada`: Nova entrada de veículo
-- `veiculo_saida`: Saída de veículo
-- `vaga_updated`: Atualização de status de vaga
-- `visitante_novo`: Novo visitante cadastrado
-- `visitante_aprovado`: Visitante aprovado
-- `visitante_entrada`: Entrada de visitante
-- `visitante_saida`: Saída de visitante
-- `chamada_nova`: Nova chamada de motorista
-- `chamada_atendida`: Chamada atendida
-
-### Conexão
-```javascript
-const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-const wsUrl = `${protocol}//${window.location.host}/ws`;
-const socket = new WebSocket(wsUrl);
+app.patch("/api/entity/:id", requireAuth, requireRole("role"), requireFilial, async (req, res) => {
+  const filialId = (req as any).filialId;
+  const entity = await storage.get(req.params.id);
+  
+  if (!entity) return res.status(404).json({ error: "Not found" });
+  if (entity.filialId !== filialId) return res.status(403).json({ error: "Access denied" });
+  
+  const { filialId: _, ...updateData } = req.body; // Strip filialId
+  const updated = await storage.update(req.params.id, updateData);
+  res.json(updated);
+});
 ```
 
-## Endpoints da API
+### Known Security Issue
+⚠️ **WebSocket broadcasts**: Currently send data to ALL connected clients without filial filtering. This allows users from one branch to see real-time updates from other branches.
 
-### Autenticação
-- `POST /api/login` - Fazer login (retorna accessToken + refreshToken)
-- `POST /api/refresh` - Renovar access token usando refresh token
-- `POST /api/logout` - Fazer logout (invalida refresh token)
-- `GET /api/user` - Obter usuário atual (requer Bearer token)
+**Impact**: Cross-tenant data exposure via real-time events (veiculo_entrada, vaga_updated, visitante_novo, chamada_nova, etc.)
 
-**Autenticação**: Todas as rotas protegidas requerem header `Authorization: Bearer <accessToken>`
+**Mitigation needed**: Track each WebSocket connection's filialId (validated at handshake) and only broadcast events to matching tenants.
 
-**IMPORTANTE**: Rota de registro público (`POST /api/register`) foi desabilitada. Apenas gestores podem criar novos usuários através da rota `POST /api/users` (requer autenticação e role "gestor").
+**Status**: Documented for future implementation - Low priority as WebSocket data is read-only and users still cannot modify other branches' data.
 
-### Usuários
-- `GET /api/users` - Listar todos os usuários
-- `POST /api/users` - Criar novo usuário
-- `PATCH /api/users/:id` - Atualizar usuário
-- `GET /api/user-filiais` - Filiais do usuário atual
-
-### Filiais
-- `GET /api/filiais` - Listar todas as filiais
-- `POST /api/filiais` - Criar nova filial
-- `PATCH /api/filiais/:id` - Atualizar filial
-
-### Veículos
-- `GET /api/veiculos/:filialId` - Veículos de uma filial
-- `GET /api/veiculos/all` - Todos os veículos
-- `POST /api/veiculos` - Registrar entrada
-- `PATCH /api/veiculos/:id/saida` - Registrar saída
-
-### Vagas
-- `GET /api/vagas/:filialId` - Vagas de uma filial
-- `POST /api/vagas` - Criar nova vaga
-- `PATCH /api/vagas/:id` - Atualizar vaga
-
-### Visitantes
-- `GET /api/visitantes/:filialId` - Visitantes de uma filial
-- `POST /api/visitantes` - Cadastrar visitante
-- `PATCH /api/visitantes/:id/aprovar` - Aprovar visitante
-- `PATCH /api/visitantes/:id/entrada` - Registrar entrada
-- `PATCH /api/visitantes/:id/saida` - Registrar saída
-
-### Chamadas
-- `GET /api/chamadas/:filialId` - Chamadas de uma filial
-- `POST /api/chamadas` - Criar chamada
-- `PATCH /api/chamadas/:id/atender` - Atender chamada
-
-### Auditoria
-- `GET /api/audit-logs` - Todos os logs de auditoria (últimos 1000)
-
-### Notificações
-- `GET /api/notifications` - Listar notificações do usuário
-- `GET /api/notifications/unread-count` - Contador de não lidas
-- `PATCH /api/notifications/:id/read` - Marcar como lida
-- `PATCH /api/notifications/mark-all-read` - Marcar todas como lidas
-- `DELETE /api/notifications/:id` - Deletar notificação
-
-## Credenciais de Teste
-
-```
-Admin:
-  username: admin
-  password: admin123
-  role: gestor
-
-Porteiro:
-  username: porteiro
-  password: porteiro123
-  role: porteiro
-
-Cliente:
-  username: cliente
-  password: cliente123
-  role: cliente
-```
-
-## Estrutura do Banco de Dados
-
-### Tabelas Principais
-- `users` - Usuários do sistema
-- `filiais` - Filiais/unidades
-- `user_permissions` - Permissões de usuário por filial
-- `refresh_tokens` - Tokens JWT de atualização (com expiração)
-- `veiculos` - Registro de veículos
-- `vagas` - Vagas do pátio
-- `visitantes` - Visitantes e prestadores
-- `chamadas` - Chamadas de motorista
-- `checklists` - Checklists digitais por veículo
-- `checklist_items` - Itens de checklist com suporte a fotos
-- `notifications` - Notificações para gestores
-- `audit_logs` - Logs de auditoria
-
-## Segurança
-
-### Autenticação
-- JWT com access tokens (15 minutos) e refresh tokens (7 dias)
-- Passwords hasheados com scrypt
-- Bloqueio automático após 5 tentativas falhas (15 minutos)
-- Refresh tokens armazenados no PostgreSQL com expiração
-- Limpeza automática de tokens expirados a cada hora
-
-### Autorização
-- Bearer token em Authorization header para todas as rotas protegidas
-- RBAC com 3 perfis distintos (requireRole middleware)
-- Validação Zod em todos os request bodies
-- Header X-Filial obrigatório para isolamento multi-tenant
-- Sanitização de dados sensíveis (password, loginAttempts, lockedUntil) em todas as respostas
-
-### Auditoria
-- Todas as ações críticas são registradas
-- Captura de IP e User Agent
-- Registro de estado antes/depois para mudanças
-
-## Design System
-
-### Cores
-- Primary: Azul #3B82F6 (operações principais)
-- Success: Verde (status positivo)
-- Warning: Amarelo/Laranja (aguardando, alertas)
-- Danger: Vermelho (erros, cancelamentos)
-- Sidebar: Azul escuro profissional
-
-### Tipografia
-- Font: Inter (Google Fonts)
-- Hierarquia clara para operações logísticas
-- Foco em legibilidade para longos períodos de uso
-
-### Componentes
-- Shadcn UI (Radix primitives)
-- Design system consistente
-- Dark mode support completo
-- Responsivo (mobile, tablet, desktop)
-
-## Comandos Úteis
-
-```bash
-# Desenvolvimento
-npm run dev
-
-# Push schema changes
-npm run db:push
-
-# Seed database
-tsx server/seed.ts
-
-# Build
-npm run build
-```
-
-## Funcionalidades Recentes
-
-### Registro Expandido de Veículos (Completo - Out 2025)
-- Suporte a múltiplos tipos de veículos:
-  - **Categorias**: Carro, Moto, Cavalo, Cavalo + Carreta (enums PostgreSQL)
-  - **Tipo de Proprietário**: Terceiro, Agregado, Frota (enums PostgreSQL)
-  - **Status da Carga**: Carregado, Descarregado, Pernoite, Manutenção (enum opcional)
-  - **Campos novos**: Multi (boolean), Valor (numeric/decimal)
-- Formulário condicional: placa carreta aparece apenas quando tipo "Cavalo + Carreta" selecionado
-- Design responsivo mobile para auto-registro de motoristas
-- Validação aprimorada: vagaId e statusCarga opcionais, removidos do payload quando vazios
-- Cache invalidation corrigido com filialId para sincronização em tempo real
-- Data-testids adicionados para facilitar testes end-to-end
-- Testes E2E passando: entrada e saída de veículos com atualização UI imediata
-
-### Exportação PDF
-- Relatórios exportáveis em PDF além de CSV
-- Formato landscape com tabela formatada
-- Headers com data e total de registros
-- Cores do tema aplicadas
-
-### Dashboard Analítico
-- Gráfico de barras: movimentações dos últimos 7 dias
-- Gráfico de pizza: distribuição por situação
-- Métrica de tempo médio de permanência (calculado em horas com precisão de frações)
-- Design responsivo com Recharts
-
-### Sistema de Notificações (Completo)
-- Backend completo com schema PostgreSQL
-- Componente NotificationCenter com ícone de sino no header
-- Polling automático a cada 10 segundos
-- Badge com contador de notificações não lidas
-- Dropdown com lista de notificações formatadas
-- Notificações criadas automaticamente quando:
-  - Porteiro cadastra visitante aguardando aprovação (apenas gestores da filial recebem)
-- Interações:
-  - Clicar na notificação marca como lida e redireciona
-  - Botão para marcar todas como lidas
-  - Deletar notificações individualmente
-- Segurança:
-  - Isolamento por filial (multi-tenant)
-  - Ownership checks em todas as rotas
-  - Autenticação via Bearer token
-
-### Sistema de Checklist Digital (Em Desenvolvimento)
-- Schema de banco de dados criado:
-  - Tabela `checklists`: gerencia checklists por veículo
-  - Tabela `checklist_items`: itens individuais com suporte a diferentes tipos (checkbox, texto, foto, número)
-- Suporte a múltiplos tipos de checklist (inspeção entrada/saída, vistoria carga)
-- Upload e associação de fotos por item
-- Status de checklist (pendente, em_andamento, concluído)
-
-## Próximas Funcionalidades (Futuro)
-
-1. Interface de criação e preenchimento de checklists
-2. Upload de fotos para itens do checklist
-3. Expandir tipos de notificações (veículos, chamadas, alertas)
-4. Integração com ERP externo
-5. Leitura automática de placas (LPR) com câmeras
-6. Notificações por email e SMS (Twilio)
-7. Aplicativo mobile
-8. Impressão de etiquetas/comprovantes
-
-## Notas Técnicas
-
-- O sistema usa React Query para cache e sincronização de dados
-- Estados de loading e erro implementados em todas as telas
-- Validação de formulários com Zod
-- Date-fns para formatação de datas em PT-BR
-- WebSocket path: `/ws` (separado do Vite HMR)
-- Session secret configurado via environment variable
-
-## Estrutura de Arquivos
-
-```
-├── client/               # Frontend React
-│   ├── src/
-│   │   ├── components/  # Componentes reutilizáveis
-│   │   ├── pages/       # Páginas da aplicação
-│   │   ├── hooks/       # Custom hooks (useAuth)
-│   │   └── lib/         # Utilities (queryClient, protected-route)
-├── server/              # Backend Express
-│   ├── auth.ts         # Configuração de autenticação
-│   ├── db.ts           # Conexão com banco
-│   ├── routes.ts       # Rotas da API + WebSocket
-│   ├── storage.ts      # Camada de acesso a dados
-│   └── seed.ts         # Script de seed
-├── shared/             # Código compartilhado
-│   └── schema.ts       # Schemas Drizzle + Zod
-└── design_guidelines.md # Guidelines de design
-```
-
-## Status do Projeto
-
-✅ Schema e modelos de dados completos
-✅ Autenticação e autorização
-✅ CRUD completo de todas entidades
-✅ WebSocket para atualizações em tempo real
-✅ Sistema de auditoria
-✅ Interface completa para todos os perfis
-✅ Dark mode
-✅ Responsivo
-✅ Exportação CSV e PDF
-✅ Dashboard analítico com gráficos (Recharts)
-✅ Sistema de notificações com polling
-🚧 Sistema de checklist digital (schema criado, interface em desenvolvimento)
-
-## Contato e Suporte
-
-Sistema desenvolvido para controle de pátios logísticos com foco em eficiência operacional e segurança.
+### Recent Security Fixes (October 2025)
+✅ Fixed all parameterized GET routes to use header-based filialId
+✅ Added entity ownership verification to all PATCH/DELETE routes
+✅ Implemented filialId stripping in all PATCH handlers
+✅ Added requireFilial middleware to all tenant-scoped routes
+✅ Fixed /api/veiculos/all to respect filial isolation
