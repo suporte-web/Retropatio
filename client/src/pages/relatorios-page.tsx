@@ -27,6 +27,12 @@ export default function RelatoriosPage() {
     cliente: "",
     transportadora: "",
     situacao: "",
+    motorista: "",
+    placa: "",
+    statusCarga: "",
+    tipoProprietario: "",
+    vaga: "",
+    observacao: "",
   });
   const [isExporting, setIsExporting] = useState(false);
 
@@ -35,12 +41,36 @@ export default function RelatoriosPage() {
     enabled: !!filialId,
   });
 
+  // Função para calcular tempo na vaga
+  const calcularTempoNaVaga = (dataEntrada: string, dataSaida: string | null) => {
+    const entrada = new Date(dataEntrada);
+    const saida = dataSaida ? new Date(dataSaida) : new Date();
+    const diffMs = saida.getTime() - entrada.getTime();
+    
+    const horas = Math.floor(diffMs / (1000 * 60 * 60));
+    const minutos = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    
+    if (horas > 24) {
+      const dias = Math.floor(horas / 24);
+      const horasRestantes = horas % 24;
+      return `${dias}d ${horasRestantes}h ${minutos}m`;
+    }
+    
+    return `${horas}h ${minutos}m`;
+  };
+
   const filteredVeiculos = veiculos?.filter((v) => {
     if (filters.dataInicio && new Date(v.dataEntrada) < new Date(filters.dataInicio)) return false;
     if (filters.dataFim && new Date(v.dataEntrada) > new Date(filters.dataFim)) return false;
     if (filters.cliente && !v.cliente?.toLowerCase().includes(filters.cliente.toLowerCase())) return false;
     if (filters.transportadora && !v.transportadora?.toLowerCase().includes(filters.transportadora.toLowerCase())) return false;
     if (filters.situacao && v.situacao !== filters.situacao) return false;
+    if (filters.motorista && !v.motorista?.toLowerCase().includes(filters.motorista.toLowerCase())) return false;
+    if (filters.placa && !v.placaCavalo?.toLowerCase().includes(filters.placa.toLowerCase())) return false;
+    if (filters.statusCarga && v.statusCarga !== filters.statusCarga) return false;
+    if (filters.tipoProprietario && v.tipoProprietario !== filters.tipoProprietario) return false;
+    if (filters.vaga && !v.vagaId) return false; // Simplified check - could enhance with vaga details
+    if (filters.observacao && !v.observacoes?.toLowerCase().includes(filters.observacao.toLowerCase())) return false;
     return true;
   });
 
