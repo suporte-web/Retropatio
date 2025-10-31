@@ -23,6 +23,10 @@ import {
   insertVagaSchema,
   insertVisitanteSchema,
   insertChamadaSchema,
+  insertMotoristaSchema,
+  insertVeiculoCadastroSchema,
+  insertFornecedorSchema,
+  insertStatusCaminhaoSchema,
   type User,
 } from "@shared/schema";
 import { fromZodError } from "zod-validation-error";
@@ -41,11 +45,20 @@ function validateBody(schema: any) {
 }
 
 // Middleware to enforce X-Filial header for multi-tenant isolation
-function requireFilial(req: Request, res: Response, next: NextFunction) {
+async function requireFilial(req: Request, res: Response, next: NextFunction) {
   const filialId = req.headers["x-filial"] as string;
+  const user = (req as any).user as User | undefined;
   
   if (!filialId) {
     return res.status(400).json({ error: "Header X-Filial é obrigatório" });
+  }
+  
+  // Validate that the user has access to this filial
+  if (user) {
+    const userFiliais = await storage.getUserFilialIds(user.id);
+    if (!userFiliais.includes(filialId)) {
+      return res.status(403).json({ error: "Acesso negado a esta filial" });
+    }
   }
   
   (req as any).filialId = filialId;
@@ -324,18 +337,20 @@ export function registerRoutes(app: Express): Server {
 
   // ==================== Veiculos Routes ====================
   
-  app.get("/api/veiculos/all", requireAuth, requireRole("gestor"), async (req, res, next) => {
+  app.get("/api/veiculos/all", requireAuth, requireRole("gestor"), requireFilial, async (req, res, next) => {
     try {
-      const veiculos = await storage.getAllVeiculos();
+      const filialId = (req as any).filialId as string;
+      const veiculos = await storage.getVeiculosByFilial(filialId);
       res.json(veiculos);
     } catch (error) {
       next(error);
     }
   });
 
-  app.get("/api/veiculos/:filialId", requireAuth, requireFilial, async (req, res, next) => {
+  app.get("/api/veiculos", requireAuth, requireFilial, async (req, res, next) => {
     try {
-      const veiculos = await storage.getVeiculosByFilial(req.params.filialId);
+      const filialId = (req as any).filialId as string;
+      const veiculos = await storage.getVeiculosByFilial(filialId);
       res.json(veiculos);
     } catch (error) {
       next(error);
@@ -366,7 +381,17 @@ export function registerRoutes(app: Express): Server {
 
   app.patch("/api/veiculos/:id/saida", requireAuth, requireFilial, async (req, res, next) => {
     try {
+      const filialId = (req as any).filialId as string;
       const veiculoBefore = await storage.getVeiculo(req.params.id);
+      
+      if (!veiculoBefore) {
+        return res.status(404).json({ error: "Veículo não encontrado" });
+      }
+      
+      if (veiculoBefore.filialId !== filialId) {
+        return res.status(403).json({ error: "Acesso negado a este veículo" });
+      }
+      
       const veiculo = await storage.registrarSaida(req.params.id);
       
       await logAudit(req, "REGISTRAR_SAIDA_VEICULO", "veiculos", veiculo.id, veiculoBefore, veiculo);
@@ -382,9 +407,10 @@ export function registerRoutes(app: Express): Server {
 
   // ==================== Vagas Routes ====================
   
-  app.get("/api/vagas/:filialId", requireAuth, requireFilial, async (req, res, next) => {
+  app.get("/api/vagas", requireAuth, requireFilial, async (req, res, next) => {
     try {
-      const vagas = await storage.getVagasByFilial(req.params.filialId);
+      const filialId = (req as any).filialId as string;
+      const vagas = await storage.getVagasByFilial(filialId);
       res.json(vagas);
     } catch (error) {
       next(error);
@@ -409,8 +435,20 @@ export function registerRoutes(app: Express): Server {
 
   app.patch("/api/vagas/:id", requireAuth, requireFilial, async (req, res, next) => {
     try {
+      const filialId = (req as any).filialId as string;
       const vagaBefore = await storage.getVaga(req.params.id);
-      const vaga = await storage.updateVaga(req.params.id, req.body);
+      
+      if (!vagaBefore) {
+        return res.status(404).json({ error: "Vaga não encontrada" });
+      }
+      
+      if (vagaBefore.filialId !== filialId) {
+        return res.status(403).json({ error: "Acesso negado a esta vaga" });
+      }
+      
+      // Prevent filialId from being changed via PATCH
+      const { filialId: _, ...updateData } = req.body;
+      const vaga = await storage.updateVaga(req.params.id, updateData);
       
       await logAudit(req, "ATUALIZAR_VAGA", "vagas", vaga.id, vagaBefore, vaga);
       
@@ -425,9 +463,10 @@ export function registerRoutes(app: Express): Server {
 
   // ==================== Visitantes Routes ====================
   
-  app.get("/api/visitantes/:filialId", requireAuth, requireFilial, async (req, res, next) => {
+  app.get("/api/visitantes", requireAuth, requireFilial, async (req, res, next) => {
     try {
-      const visitantes = await storage.getVisitantesByFilial(req.params.filialId);
+      const filialId = (req as any).filialId as string;
+      const visitantes = await storage.getVisitantesByFilial(filialId);
       res.json(visitantes);
     } catch (error) {
       next(error);
@@ -486,7 +525,17 @@ export function registerRoutes(app: Express): Server {
   app.patch("/api/visitantes/:id/aprovar", requireAuth, requireRole("porteiro", "gestor"), requireFilial, async (req, res, next) => {
     try {
       const user = (req as any).user as User;
+      const filialId = (req as any).filialId as string;
       const visitanteBefore = await storage.getVisitante(req.params.id);
+      
+      if (!visitanteBefore) {
+        return res.status(404).json({ error: "Visitante não encontrado" });
+      }
+      
+      if (visitanteBefore.filialId !== filialId) {
+        return res.status(403).json({ error: "Acesso negado a este visitante" });
+      }
+      
       const visitante = await storage.updateVisitante(req.params.id, {
         status: "aprovado",
         aprovadoPor: user.id,
@@ -506,7 +555,17 @@ export function registerRoutes(app: Express): Server {
 
   app.patch("/api/visitantes/:id/entrada", requireAuth, requireRole("porteiro", "gestor"), requireFilial, async (req, res, next) => {
     try {
+      const filialId = (req as any).filialId as string;
       const visitanteBefore = await storage.getVisitante(req.params.id);
+      
+      if (!visitanteBefore) {
+        return res.status(404).json({ error: "Visitante não encontrado" });
+      }
+      
+      if (visitanteBefore.filialId !== filialId) {
+        return res.status(403).json({ error: "Acesso negado a este visitante" });
+      }
+      
       const visitante = await storage.updateVisitante(req.params.id, {
         status: "dentro",
         dataEntrada: new Date(),
@@ -525,7 +584,17 @@ export function registerRoutes(app: Express): Server {
 
   app.patch("/api/visitantes/:id/saida", requireAuth, requireRole("porteiro", "gestor"), requireFilial, async (req, res, next) => {
     try {
+      const filialId = (req as any).filialId as string;
       const visitanteBefore = await storage.getVisitante(req.params.id);
+      
+      if (!visitanteBefore) {
+        return res.status(404).json({ error: "Visitante não encontrado" });
+      }
+      
+      if (visitanteBefore.filialId !== filialId) {
+        return res.status(403).json({ error: "Acesso negado a este visitante" });
+      }
+      
       const visitante = await storage.updateVisitante(req.params.id, {
         status: "saiu",
         dataSaida: new Date(),
@@ -544,9 +613,10 @@ export function registerRoutes(app: Express): Server {
 
   // ==================== Chamadas Routes ====================
   
-  app.get("/api/chamadas/:filialId", requireAuth, requireFilial, async (req, res, next) => {
+  app.get("/api/chamadas", requireAuth, requireFilial, async (req, res, next) => {
     try {
-      const chamadas = await storage.getChamadasByFilial(req.params.filialId);
+      const filialId = (req as any).filialId as string;
+      const chamadas = await storage.getChamadasByFilial(filialId);
       res.json(chamadas);
     } catch (error) {
       next(error);
@@ -578,7 +648,17 @@ export function registerRoutes(app: Express): Server {
   app.patch("/api/chamadas/:id/atender", requireAuth, requireRole("porteiro", "gestor"), requireFilial, async (req, res, next) => {
     try {
       const user = (req as any).user as User;
+      const filialId = (req as any).filialId as string;
       const chamadaBefore = await storage.getChamada(req.params.id);
+      
+      if (!chamadaBefore) {
+        return res.status(404).json({ error: "Chamada não encontrada" });
+      }
+      
+      if (chamadaBefore.filialId !== filialId) {
+        return res.status(403).json({ error: "Acesso negado a esta chamada" });
+      }
+      
       const chamada = await storage.updateChamada(req.params.id, {
         status: "atendida",
         atendidoPor: user.id,
@@ -669,6 +749,414 @@ export function registerRoutes(app: Express): Server {
       }
       
       await storage.deleteNotification(id);
+      res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // ==================== Motoristas Routes ====================
+  
+  app.get("/api/motoristas", requireAuth, requireFilial, async (req, res, next) => {
+    try {
+      const filialId = (req as any).filialId as string;
+      const motoristas = await storage.getMotoristasByFilial(filialId);
+      res.json(motoristas);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/api/motoristas", requireAuth, requireRole("gestor"), requireFilial, validateBody(insertMotoristaSchema), async (req, res, next) => {
+    try {
+      const user = (req as any).user as User;
+      const filialId = (req as any).filialId as string;
+      
+      const motorista = await storage.createMotorista({
+        ...req.body,
+        filialId,
+      });
+
+      await storage.createAuditLog({
+        acao: "create",
+        entidade: "motorista",
+        entidadeId: motorista.id,
+        userId: user.id,
+        filialId,
+        dadosDepois: JSON.stringify(motorista),
+      });
+
+      res.status(201).json(motorista);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.patch("/api/motoristas/:id", requireAuth, requireRole("gestor"), requireFilial, async (req, res, next) => {
+    try {
+      const user = (req as any).user as User;
+      const filialId = (req as any).filialId as string;
+      const before = await storage.getMotorista(req.params.id);
+      
+      if (!before) {
+        return res.status(404).json({ error: "Motorista não encontrado" });
+      }
+      
+      if (before.filialId !== filialId) {
+        return res.status(403).json({ error: "Acesso negado a este motorista" });
+      }
+      
+      // Prevent filialId from being changed via PATCH
+      const { filialId: _, ...updateData } = req.body;
+      const motorista = await storage.updateMotorista(req.params.id, updateData);
+
+      await storage.createAuditLog({
+        acao: "update",
+        entidade: "motorista",
+        entidadeId: motorista.id,
+        userId: user.id,
+        filialId: motorista.filialId,
+        dadosAntes: JSON.stringify(before),
+        dadosDepois: JSON.stringify(motorista),
+      });
+
+      res.json(motorista);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.delete("/api/motoristas/:id", requireAuth, requireRole("gestor"), requireFilial, async (req, res, next) => {
+    try {
+      const user = (req as any).user as User;
+      const filialId = (req as any).filialId as string;
+      const motorista = await storage.getMotorista(req.params.id);
+      
+      if (!motorista) {
+        return res.status(404).json({ error: "Motorista não encontrado" });
+      }
+      
+      if (motorista.filialId !== filialId) {
+        return res.status(403).json({ error: "Acesso negado a este motorista" });
+      }
+
+      await storage.deleteMotorista(req.params.id);
+
+      await storage.createAuditLog({
+        acao: "delete",
+        entidade: "motorista",
+        entidadeId: req.params.id,
+        userId: user.id,
+        filialId: motorista.filialId,
+        dadosAntes: JSON.stringify(motorista),
+      });
+
+      res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // ==================== Veículos Cadastro Routes ====================
+  
+  app.get("/api/veiculos-cadastro", requireAuth, requireFilial, async (req, res, next) => {
+    try {
+      const filialId = (req as any).filialId as string;
+      const veiculos = await storage.getVeiculosCadastroByFilial(filialId);
+      res.json(veiculos);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/api/veiculos-cadastro", requireAuth, requireRole("gestor"), requireFilial, validateBody(insertVeiculoCadastroSchema), async (req, res, next) => {
+    try {
+      const user = (req as any).user as User;
+      const filialId = (req as any).filialId as string;
+      
+      const veiculo = await storage.createVeiculoCadastro({
+        ...req.body,
+        filialId,
+      });
+
+      await storage.createAuditLog({
+        acao: "create",
+        entidade: "veiculo_cadastro",
+        entidadeId: veiculo.id,
+        userId: user.id,
+        filialId,
+        dadosDepois: JSON.stringify(veiculo),
+      });
+
+      res.status(201).json(veiculo);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.patch("/api/veiculos-cadastro/:id", requireAuth, requireRole("gestor"), requireFilial, async (req, res, next) => {
+    try {
+      const user = (req as any).user as User;
+      const filialId = (req as any).filialId as string;
+      const before = await storage.getVeiculoCadastro(req.params.id);
+      
+      if (!before) {
+        return res.status(404).json({ error: "Veículo não encontrado" });
+      }
+      
+      if (before.filialId !== filialId) {
+        return res.status(403).json({ error: "Acesso negado a este veículo" });
+      }
+      
+      // Prevent filialId from being changed via PATCH
+      const { filialId: _, ...updateData } = req.body;
+      const veiculo = await storage.updateVeiculoCadastro(req.params.id, updateData);
+
+      await storage.createAuditLog({
+        acao: "update",
+        entidade: "veiculo_cadastro",
+        entidadeId: veiculo.id,
+        userId: user.id,
+        filialId: veiculo.filialId,
+        dadosAntes: JSON.stringify(before),
+        dadosDepois: JSON.stringify(veiculo),
+      });
+
+      res.json(veiculo);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.delete("/api/veiculos-cadastro/:id", requireAuth, requireRole("gestor"), requireFilial, async (req, res, next) => {
+    try {
+      const user = (req as any).user as User;
+      const filialId = (req as any).filialId as string;
+      const veiculo = await storage.getVeiculoCadastro(req.params.id);
+      
+      if (!veiculo) {
+        return res.status(404).json({ error: "Veículo não encontrado" });
+      }
+      
+      if (veiculo.filialId !== filialId) {
+        return res.status(403).json({ error: "Acesso negado a este veículo" });
+      }
+
+      await storage.deleteVeiculoCadastro(req.params.id);
+
+      await storage.createAuditLog({
+        acao: "delete",
+        entidade: "veiculo_cadastro",
+        entidadeId: req.params.id,
+        userId: user.id,
+        filialId: veiculo.filialId,
+        dadosAntes: JSON.stringify(veiculo),
+      });
+
+      res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // ==================== Fornecedores Routes ====================
+  
+  app.get("/api/fornecedores", requireAuth, requireFilial, async (req, res, next) => {
+    try {
+      const filialId = (req as any).filialId as string;
+      const fornecedores = await storage.getFornecedoresByFilial(filialId);
+      res.json(fornecedores);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/api/fornecedores", requireAuth, requireRole("gestor"), requireFilial, validateBody(insertFornecedorSchema), async (req, res, next) => {
+    try {
+      const user = (req as any).user as User;
+      const filialId = (req as any).filialId as string;
+      
+      const fornecedor = await storage.createFornecedor({
+        ...req.body,
+        filialId,
+      });
+
+      await storage.createAuditLog({
+        acao: "create",
+        entidade: "fornecedor",
+        entidadeId: fornecedor.id,
+        userId: user.id,
+        filialId,
+        dadosDepois: JSON.stringify(fornecedor),
+      });
+
+      res.status(201).json(fornecedor);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.patch("/api/fornecedores/:id", requireAuth, requireRole("gestor"), requireFilial, async (req, res, next) => {
+    try {
+      const user = (req as any).user as User;
+      const filialId = (req as any).filialId as string;
+      const before = await storage.getFornecedor(req.params.id);
+      
+      if (!before) {
+        return res.status(404).json({ error: "Fornecedor não encontrado" });
+      }
+      
+      if (before.filialId !== filialId) {
+        return res.status(403).json({ error: "Acesso negado a este fornecedor" });
+      }
+      
+      // Prevent filialId from being changed via PATCH
+      const { filialId: _, ...updateData } = req.body;
+      const fornecedor = await storage.updateFornecedor(req.params.id, updateData);
+
+      await storage.createAuditLog({
+        acao: "update",
+        entidade: "fornecedor",
+        entidadeId: fornecedor.id,
+        userId: user.id,
+        filialId: fornecedor.filialId,
+        dadosAntes: JSON.stringify(before),
+        dadosDepois: JSON.stringify(fornecedor),
+      });
+
+      res.json(fornecedor);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.delete("/api/fornecedores/:id", requireAuth, requireRole("gestor"), requireFilial, async (req, res, next) => {
+    try {
+      const user = (req as any).user as User;
+      const filialId = (req as any).filialId as string;
+      const fornecedor = await storage.getFornecedor(req.params.id);
+      
+      if (!fornecedor) {
+        return res.status(404).json({ error: "Fornecedor não encontrado" });
+      }
+      
+      if (fornecedor.filialId !== filialId) {
+        return res.status(403).json({ error: "Acesso negado a este fornecedor" });
+      }
+
+      await storage.deleteFornecedor(req.params.id);
+
+      await storage.createAuditLog({
+        acao: "delete",
+        entidade: "fornecedor",
+        entidadeId: req.params.id,
+        userId: user.id,
+        filialId: fornecedor.filialId,
+        dadosAntes: JSON.stringify(fornecedor),
+      });
+
+      res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // ==================== Status Caminhão Routes ====================
+  
+  app.get("/api/status-caminhao", requireAuth, requireFilial, async (req, res, next) => {
+    try {
+      const filialId = (req as any).filialId as string;
+      const status = await storage.getStatusCaminhaoByFilial(filialId);
+      res.json(status);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/api/status-caminhao", requireAuth, requireRole("gestor"), requireFilial, validateBody(insertStatusCaminhaoSchema), async (req, res, next) => {
+    try {
+      const user = (req as any).user as User;
+      const filialId = (req as any).filialId as string;
+      
+      const status = await storage.createStatusCaminhao({
+        ...req.body,
+        filialId,
+      });
+
+      await storage.createAuditLog({
+        acao: "create",
+        entidade: "status_caminhao",
+        entidadeId: status.id,
+        userId: user.id,
+        filialId,
+        dadosDepois: JSON.stringify(status),
+      });
+
+      res.status(201).json(status);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.patch("/api/status-caminhao/:id", requireAuth, requireRole("gestor"), requireFilial, async (req, res, next) => {
+    try {
+      const user = (req as any).user as User;
+      const filialId = (req as any).filialId as string;
+      const before = await storage.getStatusCaminhao(req.params.id);
+      
+      if (!before) {
+        return res.status(404).json({ error: "Status não encontrado" });
+      }
+      
+      if (before.filialId !== filialId) {
+        return res.status(403).json({ error: "Acesso negado a este status" });
+      }
+      
+      // Prevent filialId from being changed via PATCH
+      const { filialId: _, ...updateData } = req.body;
+      const status = await storage.updateStatusCaminhao(req.params.id, updateData);
+
+      await storage.createAuditLog({
+        acao: "update",
+        entidade: "status_caminhao",
+        entidadeId: status.id,
+        userId: user.id,
+        filialId: status.filialId,
+        dadosAntes: JSON.stringify(before),
+        dadosDepois: JSON.stringify(status),
+      });
+
+      res.json(status);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.delete("/api/status-caminhao/:id", requireAuth, requireRole("gestor"), requireFilial, async (req, res, next) => {
+    try {
+      const user = (req as any).user as User;
+      const filialId = (req as any).filialId as string;
+      const status = await storage.getStatusCaminhao(req.params.id);
+      
+      if (!status) {
+        return res.status(404).json({ error: "Status não encontrado" });
+      }
+      
+      if (status.filialId !== filialId) {
+        return res.status(403).json({ error: "Acesso negado a este status" });
+      }
+
+      await storage.deleteStatusCaminhao(req.params.id);
+
+      await storage.createAuditLog({
+        acao: "delete",
+        entidade: "status_caminhao",
+        entidadeId: req.params.id,
+        userId: user.id,
+        filialId: status.filialId,
+        dadosAntes: JSON.stringify(status),
+      });
+
       res.json({ success: true });
     } catch (error) {
       next(error);

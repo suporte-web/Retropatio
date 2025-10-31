@@ -23,6 +23,10 @@ import GestaoPage from "@/pages/gestao-page";
 import UsuariosPage from "@/pages/usuarios-page";
 import FiliaisPage from "@/pages/filiais-page";
 import AuditoriaPage from "@/pages/auditoria-page";
+import MotoristasPage from "@/pages/motoristas-page";
+import VeiculosCadastroPage from "@/pages/veiculos-cadastro-page";
+import FornecedoresPage from "@/pages/fornecedores-page";
+import StatusCaminhaoPage from "@/pages/status-caminhao-page";
 import { Loader2 } from "lucide-react";
 
 function ProtectedLayout({ children }: { children: React.ReactNode }) {
@@ -158,6 +162,38 @@ function Router() {
         {() => (
           <ProtectedLayout>
             <AuditoriaPage />
+          </ProtectedLayout>
+        )}
+      </Route>
+      
+      <Route path="/motoristas">
+        {() => (
+          <ProtectedLayout>
+            <MotoristasPage />
+          </ProtectedLayout>
+        )}
+      </Route>
+      
+      <Route path="/veiculos-cadastro">
+        {() => (
+          <ProtectedLayout>
+            <VeiculosCadastroPage />
+          </ProtectedLayout>
+        )}
+      </Route>
+      
+      <Route path="/fornecedores">
+        {() => (
+          <ProtectedLayout>
+            <FornecedoresPage />
+          </ProtectedLayout>
+        )}
+      </Route>
+      
+      <Route path="/status-caminhao">
+        {() => (
+          <ProtectedLayout>
+            <StatusCaminhaoPage />
           </ProtectedLayout>
         )}
       </Route>
