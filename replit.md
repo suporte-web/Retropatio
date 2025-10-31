@@ -92,6 +92,12 @@ app.patch("/api/entity/:id", requireAuth, requireRole("role"), requireFilial, as
 ✅ **Portaria UX Enhancements**:
    - Quick-selection cards for Vehicle/Visitor operations with real-time statistics
    - Visitor approval toast notifications (5-second duration)
+   - **Simplified Vehicle Entry Forms** (October 31, 2025):
+     - **Carro/Moto**: Only 7 fields shown (tipo veículo, tipo motorista visitante/funcionário, placa, motorista, CPF opcional, vaga, observações)
+     - **Cavalo/Cavalo+Carreta**: All 14+ fields maintained (tipo proprietário, status carga, transportadora, cliente, doca, valor, multi, etc)
+     - Automatic field cleanup when switching between light and heavy vehicles to prevent data leakage
+     - CPF validation: Optional for carro/moto, required for cavalo/cavalo+carreta
+     - tipoMotorista (visitante/funcionário) stored in observações field for light vehicles
 
 ✅ **User Permissions Management**:
    - New administrative interface for managing user-filial permissions
