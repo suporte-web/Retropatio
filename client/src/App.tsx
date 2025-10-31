@@ -27,6 +27,7 @@ import MotoristasPage from "@/pages/motoristas-page";
 import VeiculosCadastroPage from "@/pages/veiculos-cadastro-page";
 import FornecedoresPage from "@/pages/fornecedores-page";
 import StatusCaminhaoPage from "@/pages/status-caminhao-page";
+import TVDisplayPage from "@/pages/tv-display-page";
 import { Loader2 } from "lucide-react";
 
 function ProtectedLayout({ children }: { children: React.ReactNode }) {
@@ -196,6 +197,10 @@ function Router() {
             <StatusCaminhaoPage />
           </ProtectedLayout>
         )}
+      </Route>
+      
+      <Route path="/tv-display">
+        {() => <TVDisplayPage />}
       </Route>
       
       <Route path="/">
