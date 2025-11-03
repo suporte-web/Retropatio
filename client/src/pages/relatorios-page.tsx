@@ -32,6 +32,9 @@ export default function RelatoriosPage() {
     statusCarga: "",
     tipoProprietario: "",
     vaga: "",
+    cte: "",
+    nf: "",
+    lacre: "",
     observacao: "",
   });
   const [isExporting, setIsExporting] = useState(false);
@@ -62,15 +65,18 @@ export default function RelatoriosPage() {
   const filteredVeiculos = veiculos?.filter((v) => {
     if (filters.dataInicio && new Date(v.dataEntrada) < new Date(filters.dataInicio)) return false;
     if (filters.dataFim && new Date(v.dataEntrada) > new Date(filters.dataFim)) return false;
-    if (filters.cliente && !v.cliente?.toLowerCase().includes(filters.cliente.toLowerCase())) return false;
-    if (filters.transportadora && !v.transportadora?.toLowerCase().includes(filters.transportadora.toLowerCase())) return false;
+    if (filters.cliente && !(v.cliente ?? "").toLowerCase().includes(filters.cliente.toLowerCase())) return false;
+    if (filters.transportadora && !(v.transportadora ?? "").toLowerCase().includes(filters.transportadora.toLowerCase())) return false;
     if (filters.situacao && v.situacao !== filters.situacao) return false;
-    if (filters.motorista && !v.motorista?.toLowerCase().includes(filters.motorista.toLowerCase())) return false;
-    if (filters.placa && !v.placaCavalo?.toLowerCase().includes(filters.placa.toLowerCase())) return false;
+    if (filters.motorista && !v.motorista.toLowerCase().includes(filters.motorista.toLowerCase())) return false;
+    if (filters.placa && !v.placaCavalo.toLowerCase().includes(filters.placa.toLowerCase())) return false;
     if (filters.statusCarga && v.statusCarga !== filters.statusCarga) return false;
     if (filters.tipoProprietario && v.tipoProprietario !== filters.tipoProprietario) return false;
-    if (filters.vaga && v.vagaId !== filters.vaga) return false; // Compare with specific vaga ID
-    if (filters.observacao && !v.observacoes?.toLowerCase().includes(filters.observacao.toLowerCase())) return false;
+    if (filters.vaga && v.vagaId !== filters.vaga) return false;
+    if (filters.cte && !(v.cte ?? "").toLowerCase().includes(filters.cte.toLowerCase())) return false;
+    if (filters.nf && !(v.nf ?? "").toLowerCase().includes(filters.nf.toLowerCase())) return false;
+    if (filters.lacre && !(v.lacre ?? "").toLowerCase().includes(filters.lacre.toLowerCase())) return false;
+    if (filters.observacao && !(v.observacoes ?? "").toLowerCase().includes(filters.observacao.toLowerCase())) return false;
     return true;
   });
 
@@ -79,7 +85,7 @@ export default function RelatoriosPage() {
     
     setIsExporting(true);
     try {
-      const headers = ["Placa Cavalo", "Placa Carreta", "Motorista", "CPF", "Transportadora", "Cliente", "Doca", "Situação", "Status Carga", "Proprietário", "Entrada", "Saída", "Tempo na Vaga", "Valor", "Observações"];
+      const headers = ["Placa Cavalo", "Placa Carreta", "Motorista", "CPF", "Transportadora", "Cliente", "Doca", "Situação", "Status Carga", "Proprietário", "Entrada", "Saída", "Tempo na Vaga", "Valor", "CTE", "NF", "Lacre", "Observações"];
       const rows = filteredVeiculos.map((v) => [
         v.placaCavalo,
         v.placaCarreta || "",
@@ -95,6 +101,9 @@ export default function RelatoriosPage() {
         v.dataSaida ? format(new Date(v.dataSaida), "dd/MM/yyyy HH:mm") : "",
         calcularTempoNaVaga(v.dataEntrada.toString(), v.dataSaida?.toString() || null),
         v.valor || "",
+        v.cte || "",
+        v.nf || "",
+        v.lacre || "",
         v.observacoes || "",
       ]);
 
@@ -132,10 +141,14 @@ export default function RelatoriosPage() {
       const headers = [
         "Placa",
         "Motorista",
-        "Transportadora",
+        "Transp.",
         "Cliente",
         "Situação",
-        "Status Carga",
+        "Status",
+        "Valor",
+        "CTE",
+        "NF",
+        "Lacre",
         "Entrada",
         "Saída",
         "Tempo"
@@ -148,6 +161,10 @@ export default function RelatoriosPage() {
         v.cliente || "-",
         v.situacao,
         v.statusCarga || "-",
+        v.valor || "-",
+        v.cte || "-",
+        v.nf || "-",
+        v.lacre || "-",
         format(new Date(v.dataEntrada), "dd/MM HH:mm"),
         v.dataSaida ? format(new Date(v.dataSaida), "dd/MM HH:mm") : "-",
         calcularTempoNaVaga(v.dataEntrada.toString(), v.dataSaida?.toString() || null),
@@ -309,6 +326,36 @@ export default function RelatoriosPage() {
               </Select>
             </div>
             <div className="space-y-2">
+              <Label htmlFor="cte-filter">CTE</Label>
+              <Input
+                id="cte-filter"
+                placeholder="Filtrar por CTE"
+                data-testid="input-cte-filter"
+                value={filters.cte}
+                onChange={(e) => setFilters({ ...filters, cte: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="nf-filter">NF</Label>
+              <Input
+                id="nf-filter"
+                placeholder="Filtrar por NF"
+                data-testid="input-nf-filter"
+                value={filters.nf}
+                onChange={(e) => setFilters({ ...filters, nf: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="lacre-filter">Lacre</Label>
+              <Input
+                id="lacre-filter"
+                placeholder="Filtrar por Lacre"
+                data-testid="input-lacre-filter"
+                value={filters.lacre}
+                onChange={(e) => setFilters({ ...filters, lacre: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="observacao-filter">Observações</Label>
               <Input
                 id="observacao-filter"
@@ -333,6 +380,9 @@ export default function RelatoriosPage() {
                   statusCarga: "",
                   tipoProprietario: "",
                   vaga: "",
+                  cte: "",
+                  nf: "",
+                  lacre: "",
                   observacao: "",
                 })}
                 data-testid="button-limpar-filtros"

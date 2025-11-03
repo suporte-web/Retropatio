@@ -9,7 +9,8 @@ import {
   LogOut,
   LayoutDashboard,
   Shield,
-  MapPin
+  MapPin,
+  PhoneCall
 } from "lucide-react";
 import {
   Sidebar,
@@ -81,6 +82,18 @@ export function AppSidebar() {
         title: "Dashboard",
         url: "/cliente",
         icon: LayoutDashboard,
+        roles: ["cliente"],
+      },
+      {
+        title: "Mapa de Vagas",
+        url: "/vagas",
+        icon: MapPin,
+        roles: ["cliente"],
+      },
+      {
+        title: "Chamadas",
+        url: "/cliente-chamadas",
+        icon: PhoneCall,
         roles: ["cliente"],
       },
       {

@@ -18,6 +18,7 @@ import VagasPage from "@/pages/vagas-page";
 import VisitantesPage from "@/pages/visitantes-page";
 import ChamadasPage from "@/pages/chamadas-page";
 import ClienteDashboardPage from "@/pages/cliente-dashboard-page";
+import ClienteChamadasPage from "@/pages/cliente-chamadas-page";
 import RelatoriosPage from "@/pages/relatorios-page";
 import GestaoPage from "@/pages/gestao-page";
 import UsuariosPage from "@/pages/usuarios-page";
@@ -123,6 +124,14 @@ function Router() {
         {() => (
           <ProtectedLayout>
             <ClienteDashboardPage />
+          </ProtectedLayout>
+        )}
+      </Route>
+      
+      <Route path="/cliente-chamadas">
+        {() => (
+          <ProtectedLayout>
+            <ClienteChamadasPage />
           </ProtectedLayout>
         )}
       </Route>

@@ -40,6 +40,9 @@ export default function PortariaPage() {
     vagaId: "",
     multi: false,
     valor: "",
+    cte: "",
+    nf: "",
+    lacre: "",
     observacoes: "",
   });
 
@@ -55,6 +58,9 @@ export default function PortariaPage() {
         cliente: "",
         doca: "",
         valor: "",
+        cte: "",
+        nf: "",
+        lacre: "",
         statusCarga: "",
         multi: false,
       }));
@@ -95,6 +101,9 @@ export default function PortariaPage() {
         delete payload.multi;
         delete payload.statusCarga;
         delete payload.valor;
+        delete payload.cte;
+        delete payload.nf;
+        delete payload.lacre;
         // Use tipoMotorista to determine observacoes context
         payload.observacoes = `Tipo: ${data.tipoMotorista === "visitante" ? "Visitante" : "Funcionário"}${data.observacoes ? ` - ${data.observacoes}` : ""}`;
         // Set a default tipoProprietario for light vehicles
@@ -145,6 +154,9 @@ export default function PortariaPage() {
         vagaId: "",
         multi: false,
         valor: "",
+        cte: "",
+        nf: "",
+        lacre: "",
         observacoes: "",
       });
     },
@@ -559,6 +571,36 @@ export default function PortariaPage() {
                           onChange={(e) => setFormData({ ...formData, valor: e.target.value })}
                         />
                       </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="cte">CTE</Label>
+                        <Input
+                          id="cte"
+                          data-testid="input-cte"
+                          placeholder="Número do CTE"
+                          value={formData.cte}
+                          onChange={(e) => setFormData({ ...formData, cte: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="nf">NF (Nota Fiscal)</Label>
+                        <Input
+                          id="nf"
+                          data-testid="input-nf"
+                          placeholder="Número da NF"
+                          value={formData.nf}
+                          onChange={(e) => setFormData({ ...formData, nf: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="lacre">Lacre</Label>
+                        <Input
+                          id="lacre"
+                          data-testid="input-lacre"
+                          placeholder="Número do Lacre"
+                          value={formData.lacre}
+                          onChange={(e) => setFormData({ ...formData, lacre: e.target.value })}
+                        />
+                      </div>
                       <div className="space-y-2 flex items-end">
                         <label className="flex items-center space-x-2 cursor-pointer">
                           <input
@@ -605,6 +647,9 @@ export default function PortariaPage() {
                       vagaId: "",
                       multi: false,
                       valor: "",
+                      cte: "",
+                      nf: "",
+                      lacre: "",
                       observacoes: "",
                     })}
                     data-testid="button-limpar"
