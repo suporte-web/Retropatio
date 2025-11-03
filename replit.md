@@ -34,7 +34,8 @@ The system is built on a modern full-stack architecture.
     - **Reporting**: Comprehensive movimentation reports with 10+ filters (transportadora, motorista, placa, vaga, status carga, tipo proprietário, observações), time-in-vaga calculation, CSV and PDF export with PIZZATTIO branding, and full audit history.
     - **Audit System**: Comprehensive logging of all critical actions, including user, timestamp, branch, action type, affected entity, before/after data (JSON), IP, and User Agent.
     - **Notification System**: Real-time notifications for managers via polling, with unread counts, status management (read/unread), and branch-specific isolation.
-    - **Administrative Modules**: CRUD functionalities for Drivers, Registered Vehicles, Suppliers, and Custom Truck Statuses, all with multi-tenant isolation, Zod validation, and automatic audit logging.
+    - **Administrative Modules**: CRUD functionalities for Drivers, Registered Vehicles, Suppliers, Custom Truck Statuses, and Vagas (Parking Spots), all with multi-tenant isolation, Zod validation, and automatic audit logging.
+    - **Vagas Administration**: Dedicated administrative interface for gestores to create, edit, and delete parking spots across all authorized filials. Features include statistics dashboard, filtering by search and filial, prevention of deletion for occupied spots, and cross-filial management using custom X-Filial headers.
     - **Analytical Dashboard**: Bar charts for daily movements, pie charts for status distribution, average stay time metrics with real-time updates, and individual vehicle duration tracking.
     - **Digital Checklist System**: Database schema created for managing checklists per vehicle and individual items, supporting various types and photo uploads (under development).
 
@@ -147,6 +148,21 @@ app.patch("/api/entity/:id", requireAuth, requireRole("role"), requireFilial, as
    - Dialog-based interface showing current permissions and available filials
    - Routes: GET/POST `/api/users/:userId/permissions`, DELETE `/api/user-permissions/:id`
    - Storage method `getUserPermissions()` returns permissions with filial details via join
+
+✅ **Vagas Administration System** (November 3, 2025):
+   - **Full CRUD Interface**: Dedicated administrative page at `/vagas-admin` for gestores
+   - **Statistics Dashboard**: Real-time cards showing Total Vagas, Vagas Livres, Vagas Ocupadas, and Filiais count
+   - **Cross-Filial Management**: Gestores can create, edit, and delete vagas for all their authorized filiais
+   - **Smart Filtering**: Search by número/descrição and filter by specific filial
+   - **Multi-Tenant Security**: 
+     - GET `/api/vagas/all` filters results by getUserFilialIds (shows only authorized filiais)
+     - POST/PATCH/DELETE use X-Filial custom headers for cross-filial operations
+     - Backend validates filial ownership and permissions on all operations
+     - Prevents deletion of occupied vagas (status !== "Livre")
+   - **Enhanced apiRequest**: Modified queryClient to accept customHeaders (4th parameter) for X-Filial overrides
+   - **Real-time Updates**: WebSocket broadcasts on create/update/delete with automatic query invalidation
+   - **Comprehensive Audit**: All CRUD operations logged with user, filial, timestamp, and change details
+   - **Data Testids**: Full coverage for E2E testing (buttons, inputs, dialogs, table rows)
 
 ✅ **Previous Security Fixes**:
    - Fixed all parameterized GET routes to use header-based filialId
