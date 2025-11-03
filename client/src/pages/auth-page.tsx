@@ -100,30 +100,32 @@ export default function AuthPage() {
         {/* Gradient waves background */}
         <div className="absolute inset-0 bg-gradient-to-br from-red-600/30 via-orange-500/30 to-yellow-500/30"></div>
         
-        <div className="max-w-md text-center text-white space-y-8 relative z-10">
-          <h2 className="text-5xl font-bold">Pizzattolog</h2>
-          <p className="text-xl opacity-90">
-            Controle Total do seu Pátio
-          </p>
-          <p className="text-lg opacity-80">
-            Gerencie entrada e saída de veículos, visitantes e operações logísticas com eficiência e segurança.
-          </p>
-          <ul className="text-left space-y-4 text-base opacity-90 mt-8">
-            <li className="flex items-center gap-3">
-              <div className="h-3 w-3 rounded-full bg-red-500"></div>
-              Controle em tempo real de vagas e movimentações
+        <div className="max-w-md text-white space-y-10 relative z-10">
+          <div className="space-y-4">
+            <h2 className="text-4xl font-bold leading-tight">
+              Controle Total do seu Pátio
+            </h2>
+            <p className="text-lg opacity-90">
+              Gerencie entrada e saída de veículos, visitantes e operações logísticas com eficiência e segurança.
+            </p>
+          </div>
+          
+          <ul className="space-y-4 text-base">
+            <li className="flex items-start gap-3">
+              <div className="h-2 w-2 rounded-full bg-red-500 mt-2 flex-shrink-0"></div>
+              <span className="opacity-90">Controle em tempo real de vagas e movimentações</span>
             </li>
-            <li className="flex items-center gap-3">
-              <div className="h-3 w-3 rounded-full bg-orange-500"></div>
-              Gestão completa de visitantes e prestadores
+            <li className="flex items-start gap-3">
+              <div className="h-2 w-2 rounded-full bg-orange-500 mt-2 flex-shrink-0"></div>
+              <span className="opacity-90">Gestão completa de visitantes e prestadores</span>
             </li>
-            <li className="flex items-center gap-3">
-              <div className="h-3 w-3 rounded-full bg-yellow-500"></div>
-              Relatórios e auditoria detalhados
+            <li className="flex items-start gap-3">
+              <div className="h-2 w-2 rounded-full bg-yellow-500 mt-2 flex-shrink-0"></div>
+              <span className="opacity-90">Relatórios e auditoria detalhados</span>
             </li>
-            <li className="flex items-center gap-3">
-              <div className="h-3 w-3 rounded-full bg-red-500"></div>
-              Sistema multi-filial integrado
+            <li className="flex items-start gap-3">
+              <div className="h-2 w-2 rounded-full bg-red-500 mt-2 flex-shrink-0"></div>
+              <span className="opacity-90">Sistema multi-filial integrado</span>
             </li>
           </ul>
         </div>
