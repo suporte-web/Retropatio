@@ -464,7 +464,9 @@ export function registerRoutes(app: Express): Server {
         return res.status(403).json({ error: "Acesso negado a este veículo" });
       }
       
-      const veiculo = await storage.registrarSaida(req.params.id);
+      // Aceita dados opcionais de CTE, NF, LACRE do req.body
+      const { cte, nf, lacre } = req.body;
+      const veiculo = await storage.registrarSaida(req.params.id, { cte, nf, lacre });
       
       await logAudit(req, "REGISTRAR_SAIDA_VEICULO", "veiculos", veiculo.id, veiculoBefore, veiculo);
       

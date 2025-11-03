@@ -83,7 +83,7 @@ export interface IStorage {
   getAllVeiculos(): Promise<Veiculo[]>;
   createVeiculo(veiculo: InsertVeiculo & { registradoPor: string }): Promise<Veiculo>;
   updateVeiculo(id: string, data: Partial<Veiculo>): Promise<Veiculo>;
-  registrarSaida(id: string): Promise<Veiculo>;
+  registrarSaida(id: string, dadosAdicionais?: { cte?: string; nf?: string; lacre?: string }): Promise<Veiculo>;
 
   // Vaga methods
   getVaga(id: string): Promise<Vaga | undefined>;
@@ -315,7 +315,7 @@ export class DatabaseStorage implements IStorage {
     return v;
   }
 
-  async registrarSaida(id: string): Promise<Veiculo> {
+  async registrarSaida(id: string, dadosAdicionais?: { cte?: string; nf?: string; lacre?: string }): Promise<Veiculo> {
     const veiculo = await this.getVeiculo(id);
     if (!veiculo) throw new Error("Veículo não encontrado");
 
@@ -324,7 +324,15 @@ export class DatabaseStorage implements IStorage {
       await this.updateVaga(veiculo.vagaId, { status: "livre" });
     }
 
-    return await this.updateVeiculo(id, { dataSaida: new Date() });
+    // Atualizar com dados adicionais se fornecidos
+    const updateData: Partial<Veiculo> = { dataSaida: new Date() };
+    if (dadosAdicionais) {
+      if (dadosAdicionais.cte) updateData.cte = dadosAdicionais.cte;
+      if (dadosAdicionais.nf) updateData.nf = dadosAdicionais.nf;
+      if (dadosAdicionais.lacre) updateData.lacre = dadosAdicionais.lacre;
+    }
+
+    return await this.updateVeiculo(id, updateData);
   }
 
   // Vaga methods

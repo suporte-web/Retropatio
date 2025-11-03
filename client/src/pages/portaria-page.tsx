@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Truck, LogOut, Plus, Loader2, Clock, UserCheck, ArrowLeft } from "lucide-react";
 import { StatusBadge } from "@/components/status-badge";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -24,6 +25,15 @@ export default function PortariaPage() {
   const filialId = localStorage.getItem("selected_filial");
   const [operationMode, setOperationMode] = useState<OperationMode>("selection");
   const [activeTab, setActiveTab] = useState("entrada");
+  
+  // Estado para Dialog de Saída
+  const [saidaDialogOpen, setSaidaDialogOpen] = useState(false);
+  const [veiculoSaida, setVeiculoSaida] = useState<Veiculo | null>(null);
+  const [saidaData, setSaidaData] = useState({
+    cte: "",
+    nf: "",
+    lacre: "",
+  });
 
   const [formData, setFormData] = useState({
     tipoVeiculoCategoria: "cavalo_carreta" as "carro" | "moto" | "cavalo" | "cavalo_carreta",
@@ -170,8 +180,8 @@ export default function PortariaPage() {
   });
 
   const registrarSaidaMutation = useMutation({
-    mutationFn: async (veiculoId: string) => {
-      const res = await apiRequest("PATCH", `/api/veiculos/${veiculoId}/saida`, {});
+    mutationFn: async ({ veiculoId, data }: { veiculoId: string; data: typeof saidaData }) => {
+      const res = await apiRequest("PATCH", `/api/veiculos/${veiculoId}/saida`, data);
       return await res.json();
     },
     onSuccess: () => {
@@ -181,12 +191,31 @@ export default function PortariaPage() {
         title: "Saída registrada",
         description: "Veículo liberado com sucesso",
       });
+      setSaidaDialogOpen(false);
+      setVeiculoSaida(null);
+      setSaidaData({ cte: "", nf: "", lacre: "" });
     },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     createVeiculoMutation.mutate(formData);
+  };
+
+  const handleAbrirSaida = (veiculo: Veiculo) => {
+    setVeiculoSaida(veiculo);
+    setSaidaData({
+      cte: veiculo.cte || "",
+      nf: veiculo.nf || "",
+      lacre: veiculo.lacre || "",
+    });
+    setSaidaDialogOpen(true);
+  };
+
+  const handleConfirmarSaida = () => {
+    if (veiculoSaida) {
+      registrarSaidaMutation.mutate({ veiculoId: veiculoSaida.id, data: saidaData });
+    }
   };
 
   const veiculosHoje = veiculos?.filter((v) => {
@@ -390,6 +419,18 @@ export default function PortariaPage() {
                       <SelectItem value="cavalo_carreta">Cavalo + Carreta</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+
+                {/* Data e Hora de Entrada (Fixada) */}
+                <div className="space-y-2">
+                  <Label htmlFor="dataHoraEntrada">Data e Hora de Entrada</Label>
+                  <Input
+                    id="dataHoraEntrada"
+                    data-testid="input-data-hora-entrada"
+                    value={format(new Date(), "dd/MM/yyyy HH:mm")}
+                    readOnly
+                    className="bg-muted cursor-not-allowed"
+                  />
                 </div>
 
                 {/* For Cavalo/Cavalo+Carreta - Show Proprietário and Status Carga */}
@@ -717,7 +758,7 @@ export default function PortariaPage() {
                         </div>
                       </div>
                       <Button
-                        onClick={() => registrarSaidaMutation.mutate(veiculo.id)}
+                        onClick={() => handleAbrirSaida(veiculo)}
                         disabled={registrarSaidaMutation.isPending}
                         data-testid={`button-saida-${veiculo.placaCavalo}`}
                       >
@@ -797,6 +838,112 @@ export default function PortariaPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Dialog de Saída com CTE, NF, LACRE */}
+      <Dialog open={saidaDialogOpen} onOpenChange={setSaidaDialogOpen}>
+        <DialogContent data-testid="dialog-saida-veiculo">
+          <DialogHeader>
+            <DialogTitle>Registrar Saída de Veículo</DialogTitle>
+            <DialogDescription>
+              Confirme ou atualize os dados antes de finalizar a saída
+            </DialogDescription>
+          </DialogHeader>
+          {veiculoSaida && (
+            <div className="space-y-4">
+              {/* Informações do Veículo */}
+              <div className="p-4 bg-muted rounded-lg space-y-2">
+                <div className="flex items-center gap-2">
+                  <Truck className="h-4 w-4 text-muted-foreground" />
+                  <span className="font-medium">{veiculoSaida.placaCavalo}</span>
+                  {veiculoSaida.placaCarreta && (
+                    <span className="text-sm text-muted-foreground">+ {veiculoSaida.placaCarreta}</span>
+                  )}
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  Motorista: {veiculoSaida.motorista}
+                </div>
+                {veiculoSaida.transportadora && (
+                  <div className="text-sm text-muted-foreground">
+                    Transportadora: {veiculoSaida.transportadora}
+                  </div>
+                )}
+              </div>
+
+              {/* Data e Hora de Saída (Fixada) */}
+              <div className="space-y-2">
+                <Label htmlFor="dataHoraSaida">Data e Hora de Saída</Label>
+                <Input
+                  id="dataHoraSaida"
+                  data-testid="input-data-hora-saida"
+                  value={format(new Date(), "dd/MM/yyyy HH:mm")}
+                  readOnly
+                  className="bg-muted cursor-not-allowed"
+                />
+              </div>
+
+              {/* CTE, NF, LACRE */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="cte-saida">CTE</Label>
+                  <Input
+                    id="cte-saida"
+                    data-testid="input-cte-saida"
+                    placeholder="CTE"
+                    value={saidaData.cte}
+                    onChange={(e) => setSaidaData({ ...saidaData, cte: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="nf-saida">NF</Label>
+                  <Input
+                    id="nf-saida"
+                    data-testid="input-nf-saida"
+                    placeholder="Nota Fiscal"
+                    value={saidaData.nf}
+                    onChange={(e) => setSaidaData({ ...saidaData, nf: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="lacre-saida">Lacre</Label>
+                  <Input
+                    id="lacre-saida"
+                    data-testid="input-lacre-saida"
+                    placeholder="Lacre"
+                    value={saidaData.lacre}
+                    onChange={(e) => setSaidaData({ ...saidaData, lacre: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setSaidaDialogOpen(false)}
+              data-testid="button-cancelar-saida"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleConfirmarSaida}
+              disabled={registrarSaidaMutation.isPending}
+              data-testid="button-confirmar-saida"
+            >
+              {registrarSaidaMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Registrando...
+                </>
+              ) : (
+                <>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Confirmar Saída
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
