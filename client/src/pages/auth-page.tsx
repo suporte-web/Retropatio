@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Truck, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import logoImage from "@assets/2_1762177643116.png";
 
 export default function AuthPage() {
   const { user, loginMutation } = useAuth();
@@ -32,11 +33,13 @@ export default function AuthPage() {
       {/* Left side - Login Form */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-background">
         <div className="w-full max-w-md space-y-6">
-          <div className="flex flex-col items-center gap-2 text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-primary">
-              <Truck className="h-10 w-10 text-primary-foreground" />
-            </div>
-            <h1 className="text-3xl font-bold text-foreground">RETROPATIO</h1>
+          <div className="flex flex-col items-center gap-4 text-center">
+            <img 
+              src={logoImage} 
+              alt="PIZZATTIO LOG" 
+              className="h-24 w-auto"
+              data-testid="img-logo"
+            />
             <p className="text-sm text-muted-foreground">Sistema de Controle de Pátio e Portaria</p>
           </div>
 
@@ -95,28 +98,35 @@ export default function AuthPage() {
       </div>
 
       {/* Right side - Hero */}
-      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-primary via-primary/90 to-primary/80 items-center justify-center p-12">
-        <div className="max-w-md text-center text-primary-foreground space-y-6">
-          <Truck className="h-24 w-24 mx-auto opacity-90" />
+      <div className="hidden lg:flex lg:w-1/2 bg-black items-center justify-center p-12 relative overflow-hidden">
+        {/* Gradient waves background */}
+        <div className="absolute inset-0 bg-gradient-to-br from-red-600/20 via-orange-500/20 to-yellow-500/20"></div>
+        
+        <div className="max-w-md text-center text-white space-y-6 relative z-10">
+          <img 
+            src={logoImage} 
+            alt="PIZZATTIO LOG" 
+            className="h-32 w-auto mx-auto mb-8"
+          />
           <h2 className="text-4xl font-bold">Controle Total do seu Pátio</h2>
           <p className="text-lg opacity-90">
             Gerencie entrada e saída de veículos, visitantes e operações logísticas com eficiência e segurança.
           </p>
           <ul className="text-left space-y-3 text-sm opacity-90">
             <li className="flex items-center gap-2">
-              <div className="h-2 w-2 rounded-full bg-primary-foreground"></div>
+              <div className="h-2 w-2 rounded-full bg-red-500"></div>
               Controle em tempo real de vagas e movimentações
             </li>
             <li className="flex items-center gap-2">
-              <div className="h-2 w-2 rounded-full bg-primary-foreground"></div>
+              <div className="h-2 w-2 rounded-full bg-orange-500"></div>
               Gestão completa de visitantes e prestadores
             </li>
             <li className="flex items-center gap-2">
-              <div className="h-2 w-2 rounded-full bg-primary-foreground"></div>
+              <div className="h-2 w-2 rounded-full bg-yellow-500"></div>
               Relatórios e auditoria detalhados
             </li>
             <li className="flex items-center gap-2">
-              <div className="h-2 w-2 rounded-full bg-primary-foreground"></div>
+              <div className="h-2 w-2 rounded-full bg-red-500"></div>
               Sistema multi-filial integrado
             </li>
           </ul>

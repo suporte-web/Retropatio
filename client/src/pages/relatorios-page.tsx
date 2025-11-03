@@ -69,7 +69,7 @@ export default function RelatoriosPage() {
     if (filters.placa && !v.placaCavalo?.toLowerCase().includes(filters.placa.toLowerCase())) return false;
     if (filters.statusCarga && v.statusCarga !== filters.statusCarga) return false;
     if (filters.tipoProprietario && v.tipoProprietario !== filters.tipoProprietario) return false;
-    if (filters.vaga && !v.vagaId) return false; // Simplified check - could enhance with vaga details
+    if (filters.vaga && v.vagaId !== filters.vaga) return false; // Compare with specific vaga ID
     if (filters.observacao && !v.observacoes?.toLowerCase().includes(filters.observacao.toLowerCase())) return false;
     return true;
   });
@@ -79,7 +79,7 @@ export default function RelatoriosPage() {
     
     setIsExporting(true);
     try {
-      const headers = ["Placa Cavalo", "Placa Carreta", "Motorista", "CPF", "Transportadora", "Cliente", "Doca", "Situação", "Entrada", "Saída"];
+      const headers = ["Placa Cavalo", "Placa Carreta", "Motorista", "CPF", "Transportadora", "Cliente", "Doca", "Situação", "Status Carga", "Proprietário", "Entrada", "Saída", "Tempo na Vaga", "Valor", "Observações"];
       const rows = filteredVeiculos.map((v) => [
         v.placaCavalo,
         v.placaCarreta || "",
@@ -89,8 +89,13 @@ export default function RelatoriosPage() {
         v.cliente || "",
         v.doca || "",
         v.situacao,
+        v.statusCarga || "",
+        v.tipoProprietario || "",
         format(new Date(v.dataEntrada), "dd/MM/yyyy HH:mm"),
         v.dataSaida ? format(new Date(v.dataSaida), "dd/MM/yyyy HH:mm") : "",
+        calcularTempoNaVaga(v.dataEntrada.toString(), v.dataSaida?.toString() || null),
+        v.valor || "",
+        v.observacoes || "",
       ]);
 
       const csv = [headers, ...rows].map((row) => row.join(",")).join("\n");
@@ -125,29 +130,27 @@ export default function RelatoriosPage() {
 
       // Table
       const headers = [
-        "Placa Cavalo",
-        "Placa Carreta",
+        "Placa",
         "Motorista",
-        "CPF",
         "Transportadora",
         "Cliente",
-        "Doca",
         "Situação",
+        "Status Carga",
         "Entrada",
-        "Saída"
+        "Saída",
+        "Tempo"
       ];
 
       const rows = filteredVeiculos.map((v) => [
-        v.placaCavalo,
-        v.placaCarreta || "-",
+        v.placaCarreta ? `${v.placaCavalo}+${v.placaCarreta}` : v.placaCavalo,
         v.motorista,
-        v.cpfMotorista || "-",
         v.transportadora || "-",
         v.cliente || "-",
-        v.doca || "-",
         v.situacao,
-        format(new Date(v.dataEntrada), "dd/MM/yyyy HH:mm"),
-        v.dataSaida ? format(new Date(v.dataSaida), "dd/MM/yyyy HH:mm") : "-",
+        v.statusCarga || "-",
+        format(new Date(v.dataEntrada), "dd/MM HH:mm"),
+        v.dataSaida ? format(new Date(v.dataSaida), "dd/MM HH:mm") : "-",
+        calcularTempoNaVaga(v.dataEntrada.toString(), v.dataSaida?.toString() || null),
       ]);
 
       autoTable(doc, {
@@ -159,7 +162,7 @@ export default function RelatoriosPage() {
           cellPadding: 2,
         },
         headStyles: {
-          fillColor: [59, 130, 246], // Primary blue color
+          fillColor: [239, 68, 68], // PIZZATTIO red color
           textColor: 255,
           fontStyle: "bold",
         },
@@ -250,6 +253,71 @@ export default function RelatoriosPage() {
                 onChange={(e) => setFilters({ ...filters, transportadora: e.target.value })}
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="motorista-filter">Motorista</Label>
+              <Input
+                id="motorista-filter"
+                placeholder="Filtrar por motorista"
+                data-testid="input-motorista-filter"
+                value={filters.motorista}
+                onChange={(e) => setFilters({ ...filters, motorista: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="placa-filter">Placa</Label>
+              <Input
+                id="placa-filter"
+                placeholder="Filtrar por placa"
+                data-testid="input-placa-filter"
+                value={filters.placa}
+                onChange={(e) => setFilters({ ...filters, placa: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="statusCarga-filter">Status da Carga</Label>
+              <Select
+                value={filters.statusCarga}
+                onValueChange={(value) => setFilters({ ...filters, statusCarga: value })}
+              >
+                <SelectTrigger id="statusCarga-filter" data-testid="select-status-carga">
+                  <SelectValue placeholder="Todos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Todos</SelectItem>
+                  <SelectItem value="carregado">Carregado</SelectItem>
+                  <SelectItem value="descarregado">Descarregado</SelectItem>
+                  <SelectItem value="pernoite">Pernoite</SelectItem>
+                  <SelectItem value="manutencao">Manutenção</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="tipoProprietario-filter">Tipo Proprietário</Label>
+              <Select
+                value={filters.tipoProprietario}
+                onValueChange={(value) => setFilters({ ...filters, tipoProprietario: value })}
+              >
+                <SelectTrigger id="tipoProprietario-filter" data-testid="select-tipo-proprietario">
+                  <SelectValue placeholder="Todos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Todos</SelectItem>
+                  <SelectItem value="terceiro">Terceiro</SelectItem>
+                  <SelectItem value="agregado">Agregado</SelectItem>
+                  <SelectItem value="frota">Frota</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="observacao-filter">Observações</Label>
+              <Input
+                id="observacao-filter"
+                placeholder="Filtrar por observações"
+                data-testid="input-observacao-filter"
+                value={filters.observacao}
+                onChange={(e) => setFilters({ ...filters, observacao: e.target.value })}
+              />
+            </div>
             <div className="flex items-end">
               <Button
                 variant="outline"
@@ -260,6 +328,12 @@ export default function RelatoriosPage() {
                   cliente: "",
                   transportadora: "",
                   situacao: "",
+                  motorista: "",
+                  placa: "",
+                  statusCarga: "",
+                  tipoProprietario: "",
+                  vaga: "",
+                  observacao: "",
                 })}
                 data-testid="button-limpar-filtros"
               >
@@ -358,11 +432,14 @@ export default function RelatoriosPage() {
                         </div>
                       )}
                     </div>
-                    <div className="text-right text-sm text-muted-foreground">
+                    <div className="text-right text-sm text-muted-foreground space-y-1">
                       <div>Entrada: {format(new Date(veiculo.dataEntrada), "dd/MM/yyyy HH:mm", { locale: ptBR })}</div>
                       {veiculo.dataSaida && (
                         <div>Saída: {format(new Date(veiculo.dataSaida), "dd/MM/yyyy HH:mm", { locale: ptBR })}</div>
                       )}
+                      <div className="font-medium text-primary">
+                        ⏱️ {calcularTempoNaVaga(veiculo.dataEntrada.toString(), veiculo.dataSaida?.toString() || null)}
+                      </div>
                     </div>
                   </div>
                 </div>
