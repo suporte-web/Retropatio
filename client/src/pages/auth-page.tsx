@@ -35,18 +35,16 @@ export default function AuthPage() {
         <div className="w-full max-w-md space-y-6">
           <Card>
             <CardHeader>
-              <div className="flex items-center gap-4 mb-2">
+              <div className="flex flex-col items-center gap-3 mb-2">
                 <img 
                   src={logoImage} 
-                  alt="PIZZATTIO LOG" 
-                  className="h-16 w-auto"
+                  alt="Pizzattolog" 
+                  className="h-20 w-auto"
                   data-testid="img-logo"
                 />
-                <div className="flex-1">
-                  <CardTitle className="text-2xl">Acesse sua conta</CardTitle>
-                </div>
+                <CardTitle className="text-2xl text-center">Acesse sua conta</CardTitle>
               </div>
-              <CardDescription>
+              <CardDescription className="text-center">
                 Entre com suas credenciais para acessar o sistema de controle de pátio e portaria
               </CardDescription>
             </CardHeader>
@@ -103,7 +101,7 @@ export default function AuthPage() {
         <div className="absolute inset-0 bg-gradient-to-br from-red-600/30 via-orange-500/30 to-yellow-500/30"></div>
         
         <div className="max-w-md text-center text-white space-y-8 relative z-10">
-          <h2 className="text-5xl font-bold">PIZZATTIO LOG</h2>
+          <h2 className="text-5xl font-bold">Pizzattolog</h2>
           <p className="text-xl opacity-90">
             Controle Total do seu Pátio
           </p>
