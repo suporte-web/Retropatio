@@ -1,8 +1,8 @@
-# APP RETROPATIO - Sistema de Controle de Pátio e Portaria
+# APP PIZZATTIO LOG - Sistema de Controle de Pátio e Portaria
 
 ## Overview
 
-A comprehensive web-based system designed for managing vehicle and visitor entry/exit in logistics yards. It features RBAC user profiles, multi-branch operations, real-time tracking, and detailed reporting. The system aims to enhance operational efficiency and security in logistics environments.
+A comprehensive web-based system designed for managing vehicle and visitor entry/exit in logistics yards. Rebranded as PIZZATTIO LOG with signature red/orange/yellow branding. Features RBAC user profiles, multi-branch operations, real-time tracking, detailed reporting with time-in-vaga calculations, TV display for driver calls, and enhanced analytics. The system aims to enhance operational efficiency and security in logistics environments.
 
 ## User Preferences
 
@@ -24,17 +24,18 @@ The system is built on a modern full-stack architecture.
 - **Real-time Communication**: WebSockets (`ws`) for instant updates on vehicle movements, visitor status, and calls.
 - **Authentication**: Session-based authentication using Passport.js, JWTs with access and refresh tokens, scrypt for password hashing, and brute-force protection.
 - **Authorization**: Role-Based Access Control (RBAC) with "Porteiro" (Gatekeeper), "Cliente" (Client), and "Gestor/Admin" (Manager/Admin) roles. Multi-tenant architecture with logical data isolation per branch using a `filialId` field.
-- **UI/UX**: Emphasis on readability with the Inter font, clear hierarchy, and a professional color scheme (Primary: Azul #3B82F6, Success: Green, Warning: Yellow/Orange, Danger: Red).
+- **UI/UX**: Emphasis on readability with the Inter font, clear hierarchy, and PIZZATTIO branding color scheme (Primary: Red #EF4444, Secondary: Orange #F97316, Accent: Yellow #FDE047, Success: Green, Warning: Yellow/Orange, Danger: Red).
 - **Core Features**:
     - **Portaria Control**: Vehicle entry/exit registration with various categories (Carro, Moto, Cavalo, Cavalo + Carreta), owner types (Terceiro, Agregado, Frota), and load statuses (Carregado, Descarregado, Pernoite, Manutenção). Conditional fields and mobile-responsive forms for self-registration.
     - **Vaga Map**: Real-time visualization of 20 parking spots per branch, showing Free/Occupied status.
     - **Visitor Management**: Registration, approval workflow, and entry/exit tracking for visitors and service providers.
     - **Call System**: Driver notification and status tracking (Pendente, Atendida, Cancelada).
-    - **Reporting**: Movimentation reports with filters, CSV and PDF export, and a full audit history.
+    - **TV Display**: Public display page for driver calls with black background and PIZZATTIO gradient colors, designed for warehouse TV monitors with auto-refresh.
+    - **Reporting**: Comprehensive movimentation reports with 10+ filters (transportadora, motorista, placa, vaga, status carga, tipo proprietário, observações), time-in-vaga calculation, CSV and PDF export with PIZZATTIO branding, and full audit history.
     - **Audit System**: Comprehensive logging of all critical actions, including user, timestamp, branch, action type, affected entity, before/after data (JSON), IP, and User Agent.
     - **Notification System**: Real-time notifications for managers via polling, with unread counts, status management (read/unread), and branch-specific isolation.
     - **Administrative Modules**: CRUD functionalities for Drivers, Registered Vehicles, Suppliers, and Custom Truck Statuses, all with multi-tenant isolation, Zod validation, and automatic audit logging.
-    - **Analytical Dashboard**: Bar charts for daily movements, pie charts for status distribution, and average stay time metrics.
+    - **Analytical Dashboard**: Bar charts for daily movements, pie charts for status distribution, average stay time metrics with real-time updates, and individual vehicle duration tracking.
     - **Digital Checklist System**: Database schema created for managing checklists per vehicle and individual items, supporting various types and photo uploads (under development).
 
 ## External Dependencies
@@ -82,7 +83,40 @@ app.patch("/api/entity/:id", requireAuth, requireRole("role"), requireFilial, as
 });
 ```
 
-### Recent Security & Feature Updates (October 2025)
+### Recent Security & Feature Updates (October-November 2025)
+
+✅ **PIZZATTIO Rebranding** (November 3, 2025):
+   - Complete visual rebrand from blue to PIZZATTIO signature colors
+   - Primary: Red #EF4444 (HSL: 0 91% 57%)
+   - Secondary: Orange #F97316, Accent: Yellow #FDE047
+   - Updated all pages including login, reports, TV display
+   - Logo integrated into login page with black background and gradient
+   - PDF exports now use red headers matching brand identity
+   - Dark mode support maintained with new color palette
+
+✅ **TV Display for Driver Calls** (November 3, 2025):
+   - New public display page at `/tv-display` for warehouse monitors
+   - Black background with PIZZATTIO red/orange/yellow gradient
+   - Shows pending driver calls with placa, motorista, and motivo
+   - Auto-refresh every 30 seconds + WebSocket real-time updates
+   - Large, high-contrast text designed for TV visibility
+   - Animated pulse effects on call cards
+
+✅ **Enhanced Reporting System** (November 3, 2025):
+   - Added 10+ comprehensive filters: transportadora, motorista, placa, vaga, status carga, tipo proprietário, observações, data range
+   - Tempo na vaga calculation (days, hours, minutes) for all vehicles
+   - Fixed vaga filter to correctly compare vagaId
+   - Time display in cards, CSV exports, and PDF reports
+   - PDF export header color updated to PIZZATTIO red
+   - Improved UX with clear filter sections
+
+✅ **Dashboard Analytics Improvements** (November 3, 2025):
+   - Enhanced "Tempo Médio na Vaga" card with better formatting (shows days if >= 24h)
+   - Added count of finalized vehicles used in average calculation
+   - Real-time duration updates every 60 seconds for active vehicles
+   - Individual vehicle duration display with Timer icon in recent activity
+   - Accurate Math.floor formatting (no rounding errors)
+
 ✅ **WebSocket Filial Filtering**: WebSocket connections now track filialId per client and broadcasts are filtered by target filial
    - filialId extracted from WebSocket URL query parameter during connection
    - All 9 broadcast calls updated to include targetFilialId parameter
