@@ -88,8 +88,10 @@ export interface IStorage {
   // Vaga methods
   getVaga(id: string): Promise<Vaga | undefined>;
   getVagasByFilial(filialId: string): Promise<Vaga[]>;
+  getAllVagas(): Promise<Vaga[]>;
   createVaga(vaga: InsertVaga): Promise<Vaga>;
   updateVaga(id: string, data: Partial<Vaga>): Promise<Vaga>;
+  deleteVaga(id: string): Promise<void>;
 
   // Visitante methods
   getVisitante(id: string): Promise<Visitante | undefined>;
@@ -345,6 +347,10 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(vagas).where(eq(vagas.filialId, filialId));
   }
 
+  async getAllVagas(): Promise<Vaga[]> {
+    return await db.select().from(vagas);
+  }
+
   async createVaga(vaga: InsertVaga): Promise<Vaga> {
     const [v] = await db.insert(vagas).values(vaga).returning();
     return v;
@@ -356,6 +362,10 @@ export class DatabaseStorage implements IStorage {
       .where(eq(vagas.id, id))
       .returning();
     return v;
+  }
+
+  async deleteVaga(id: string): Promise<void> {
+    await db.delete(vagas).where(eq(vagas.id, id));
   }
 
   // Visitante methods

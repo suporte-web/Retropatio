@@ -81,8 +81,12 @@ export async function apiRequest(
   method: string,
   url: string,
   data?: unknown | undefined,
-  retryOnce = true,
+  customHeaders?: Record<string, string> | boolean,
 ): Promise<Response> {
+  // If customHeaders is boolean, it's the old retryOnce parameter
+  const retryOnce = typeof customHeaders === 'boolean' ? customHeaders : true;
+  const additionalHeaders = typeof customHeaders === 'object' ? customHeaders : {};
+
   const token = getAccessToken();
   const headers: Record<string, string> = {};
   
@@ -94,11 +98,16 @@ export async function apiRequest(
     headers["Content-Type"] = "application/json";
   }
 
-  // Add X-Filial header if a filial is selected
-  const selectedFilial = localStorage.getItem("selected_filial");
-  if (selectedFilial) {
-    headers["X-Filial"] = selectedFilial;
+  // Add X-Filial header if a filial is selected (unless overridden)
+  if (!additionalHeaders["X-Filial"]) {
+    const selectedFilial = localStorage.getItem("selected_filial");
+    if (selectedFilial) {
+      headers["X-Filial"] = selectedFilial;
+    }
   }
+
+  // Merge custom headers (they override defaults)
+  Object.assign(headers, additionalHeaders);
 
   const res = await fetch(url, {
     method,

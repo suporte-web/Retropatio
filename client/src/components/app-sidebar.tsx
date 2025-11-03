@@ -124,6 +124,12 @@ export function AppSidebar() {
         roles: ["gestor"],
       },
       {
+        title: "Vagas",
+        url: "/vagas-admin",
+        icon: MapPin,
+        roles: ["gestor"],
+      },
+      {
         title: "Auditoria",
         url: "/auditoria",
         icon: FileText,

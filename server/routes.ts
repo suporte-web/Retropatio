@@ -481,6 +481,21 @@ export function registerRoutes(app: Express): Server {
 
   // ==================== Vagas Routes ====================
   
+  app.get("/api/vagas/all", requireAuth, requireRole("gestor"), async (req, res, next) => {
+    try {
+      const user = (req as any).user as User;
+      const userFilialIds = await storage.getUserFilialIds(user.id);
+      
+      // Get all vagas but only return those from filiais the gestor has access to
+      const allVagas = await storage.getAllVagas();
+      const filteredVagas = allVagas.filter(vaga => userFilialIds.includes(vaga.filialId));
+      
+      res.json(filteredVagas);
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.get("/api/vagas", requireAuth, requireFilial, async (req, res, next) => {
     try {
       const filialId = (req as any).filialId as string;
@@ -501,6 +516,10 @@ export function registerRoutes(app: Express): Server {
       });
       
       await logAudit(req, "CRIAR_VAGA", "vagas", vaga.id, null, vaga);
+      
+      // Broadcast to WebSocket clients (only to this filial)
+      broadcastToClients({ type: "vaga_created", data: vaga }, vaga.filialId);
+      
       res.status(201).json(vaga);
     } catch (error) {
       next(error);
@@ -530,6 +549,37 @@ export function registerRoutes(app: Express): Server {
       broadcastToClients({ type: "vaga_updated", data: vaga }, vaga.filialId);
       
       res.json(vaga);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.delete("/api/vagas/:id", requireAuth, requireRole("gestor"), requireFilial, async (req, res, next) => {
+    try {
+      const filialId = (req as any).filialId as string;
+      const vaga = await storage.getVaga(req.params.id);
+      
+      if (!vaga) {
+        return res.status(404).json({ error: "Vaga não encontrada" });
+      }
+      
+      if (vaga.filialId !== filialId) {
+        return res.status(403).json({ error: "Acesso negado a esta vaga" });
+      }
+
+      // Check if vaga is occupied
+      if (vaga.status === "ocupada") {
+        return res.status(400).json({ error: "Não é possível deletar uma vaga ocupada" });
+      }
+
+      await storage.deleteVaga(req.params.id);
+      
+      await logAudit(req, "DELETAR_VAGA", "vagas", vaga.id, vaga, null);
+      
+      // Broadcast to WebSocket clients (only to this filial)
+      broadcastToClients({ type: "vaga_deleted", data: { id: vaga.id } }, vaga.filialId);
+      
+      res.status(204).send();
     } catch (error) {
       next(error);
     }

@@ -15,6 +15,7 @@ import AuthPage from "@/pages/auth-page";
 import FilialSelectionPage from "@/pages/filial-selection-page";
 import PortariaPage from "@/pages/portaria-page";
 import VagasPage from "@/pages/vagas-page";
+import VagasAdminPage from "@/pages/vagas-admin-page";
 import VisitantesPage from "@/pages/visitantes-page";
 import ChamadasPage from "@/pages/chamadas-page";
 import ClienteDashboardPage from "@/pages/cliente-dashboard-page";
@@ -172,6 +173,14 @@ function Router() {
         {() => (
           <ProtectedLayout>
             <AuditoriaPage />
+          </ProtectedLayout>
+        )}
+      </Route>
+      
+      <Route path="/vagas-admin">
+        {() => (
+          <ProtectedLayout>
+            <VagasAdminPage />
           </ProtectedLayout>
         )}
       </Route>
