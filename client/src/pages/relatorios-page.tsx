@@ -26,11 +26,11 @@ export default function RelatoriosPage() {
     dataFim: "",
     cliente: "",
     transportadora: "",
-    situacao: "",
+    situacao: "all",
     motorista: "",
     placa: "",
-    statusCarga: "",
-    tipoProprietario: "",
+    statusCarga: "all",
+    tipoProprietario: "all",
     vaga: "",
     cte: "",
     nf: "",
@@ -67,11 +67,11 @@ export default function RelatoriosPage() {
     if (filters.dataFim && new Date(v.dataEntrada) > new Date(filters.dataFim)) return false;
     if (filters.cliente && !(v.cliente ?? "").toLowerCase().includes(filters.cliente.toLowerCase())) return false;
     if (filters.transportadora && !(v.transportadora ?? "").toLowerCase().includes(filters.transportadora.toLowerCase())) return false;
-    if (filters.situacao && v.situacao !== filters.situacao) return false;
+    if (filters.situacao && filters.situacao !== "all" && v.situacao !== filters.situacao) return false;
     if (filters.motorista && !v.motorista.toLowerCase().includes(filters.motorista.toLowerCase())) return false;
     if (filters.placa && !v.placaCavalo.toLowerCase().includes(filters.placa.toLowerCase())) return false;
-    if (filters.statusCarga && v.statusCarga !== filters.statusCarga) return false;
-    if (filters.tipoProprietario && v.tipoProprietario !== filters.tipoProprietario) return false;
+    if (filters.statusCarga && filters.statusCarga !== "all" && v.statusCarga !== filters.statusCarga) return false;
+    if (filters.tipoProprietario && filters.tipoProprietario !== "all" && v.tipoProprietario !== filters.tipoProprietario) return false;
     if (filters.vaga && v.vagaId !== filters.vaga) return false;
     if (filters.cte && !(v.cte ?? "").toLowerCase().includes(filters.cte.toLowerCase())) return false;
     if (filters.nf && !(v.nf ?? "").toLowerCase().includes(filters.nf.toLowerCase())) return false;
@@ -241,7 +241,7 @@ export default function RelatoriosPage() {
                   <SelectValue placeholder="Todas" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todas</SelectItem>
+                  <SelectItem value="all">Todas</SelectItem>
                   <SelectItem value="aguardando">Aguardando</SelectItem>
                   <SelectItem value="docado">Docado</SelectItem>
                   <SelectItem value="carregando">Carregando</SelectItem>
@@ -300,7 +300,7 @@ export default function RelatoriosPage() {
                   <SelectValue placeholder="Todos" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todos</SelectItem>
+                  <SelectItem value="all">Todos</SelectItem>
                   <SelectItem value="carregado">Carregado</SelectItem>
                   <SelectItem value="descarregado">Descarregado</SelectItem>
                   <SelectItem value="pernoite">Pernoite</SelectItem>
@@ -318,7 +318,7 @@ export default function RelatoriosPage() {
                   <SelectValue placeholder="Todos" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todos</SelectItem>
+                  <SelectItem value="all">Todos</SelectItem>
                   <SelectItem value="terceiro">Terceiro</SelectItem>
                   <SelectItem value="agregado">Agregado</SelectItem>
                   <SelectItem value="frota">Frota</SelectItem>
