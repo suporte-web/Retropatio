@@ -132,6 +132,14 @@ app.patch("/api/entity/:id", requireAuth, requireRole("role"), requireFilial, as
      - Automatic field cleanup when switching between light and heavy vehicles to prevent data leakage
      - CPF validation: Optional for carro/moto, required for cavalo/cavalo+carreta
      - tipoMotorista (visitante/funcionário) stored in observações field for light vehicles
+   - **Timestamp and Document Fields** (November 3, 2025):
+     - **Data/Hora de Entrada**: Fixed readonly field showing current timestamp in entrada form (format: dd/MM/yyyy HH:mm)
+     - **Data/Hora de Saída**: Fixed readonly field showing current timestamp in saída dialog
+     - **Saída Dialog**: Comprehensive exit dialog with vehicle info display, editable CTE/NF/LACRE fields
+     - **Document Pre-fill**: CTE/NF/LACRE from entrada are pre-filled in saída dialog for easy updates
+     - **Backend Update**: registrarSaida method accepts optional dadosAdicionais {cte, nf, lacre} parameter
+     - **Controlled State**: All saída inputs use controlled state with onChange handlers
+     - All timestamp fields have bg-muted class and are non-editable for record integrity
 
 ✅ **User Permissions Management**:
    - New administrative interface for managing user-filial permissions
