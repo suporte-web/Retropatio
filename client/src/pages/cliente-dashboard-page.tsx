@@ -1,10 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Truck, Clock, CheckCircle2, Loader2, TrendingUp } from "lucide-react";
+import { Truck, Clock, CheckCircle2, Loader2, TrendingUp, Timer } from "lucide-react";
 import { StatusBadge } from "@/components/status-badge";
 import { format, subDays, startOfDay, differenceInMinutes } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import type { Veiculo } from "@shared/schema";
+import { useState, useEffect } from "react";
 import {
   BarChart,
   Bar,
@@ -21,11 +22,20 @@ import {
 
 export default function ClienteDashboardPage() {
   const filialId = localStorage.getItem("selected_filial");
+  const [currentTime, setCurrentTime] = useState(new Date());
 
   const { data: veiculos, isLoading } = useQuery<Veiculo[]>({
     queryKey: ["/api/veiculos", filialId],
     enabled: !!filialId,
   });
+
+  // Update time every minute for real-time duration display
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60000); // Update every minute
+    return () => clearInterval(interval);
+  }, []);
 
   const veiculosAtivos = veiculos?.filter((v) => !v.dataSaida);
   const veiculosHoje = veiculos?.filter((v) => {
@@ -81,6 +91,29 @@ export default function ClienteDashboardPage() {
       }, 0) / veiculosComSaida.length
     : 0;
 
+  // Função para calcular tempo na vaga
+  const calcularTempoNaVaga = (dataEntrada: string, dataSaida: string | null): string => {
+    const entrada = new Date(dataEntrada);
+    const saida = dataSaida ? new Date(dataSaida) : new Date();
+    
+    const diffMs = saida.getTime() - entrada.getTime();
+    const diffMinutos = Math.floor(diffMs / (1000 * 60));
+    
+    if (diffMinutos < 60) {
+      return `${diffMinutos}m`;
+    }
+    
+    const dias = Math.floor(diffMinutos / (60 * 24));
+    const horas = Math.floor((diffMinutos % (60 * 24)) / 60);
+    const minutos = diffMinutos % 60;
+    
+    if (dias > 0) {
+      return `${dias}d ${horas}h ${minutos}m`;
+    }
+    
+    return `${horas}h ${minutos}m`;
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -130,9 +163,17 @@ export default function ClienteDashboardPage() {
           <CardHeader className="pb-2">
             <CardDescription className="flex items-center gap-2">
               <Clock className="h-4 w-4" />
-              Tempo Médio
+              Tempo Médio na Vaga
             </CardDescription>
-            <CardTitle className="text-3xl">{tempoMedioPermanencia.toFixed(1)}h</CardTitle>
+            <CardTitle className="text-3xl">
+              {tempoMedioPermanencia >= 24 
+                ? `${Math.floor(tempoMedioPermanencia / 24)}d ${Math.floor(tempoMedioPermanencia % 24)}h`
+                : `${tempoMedioPermanencia.toFixed(1)}h`
+              }
+            </CardTitle>
+            <p className="text-xs text-muted-foreground mt-1">
+              {veiculosComSaida?.length || 0} veículos finalizados
+            </p>
           </CardHeader>
         </Card>
       </div>
@@ -241,11 +282,15 @@ export default function ClienteDashboardPage() {
                       <StatusBadge status={veiculo.situacao} type="veiculo" />
                     </div>
                   </div>
-                  <div className="text-right text-sm text-muted-foreground">
+                  <div className="text-right text-sm text-muted-foreground space-y-1">
                     <div>Entrada: {format(new Date(veiculo.dataEntrada), "HH:mm", { locale: ptBR })}</div>
                     {veiculo.dataSaida && (
                       <div>Saída: {format(new Date(veiculo.dataSaida), "HH:mm", { locale: ptBR })}</div>
                     )}
+                    <div className="font-medium text-primary flex items-center justify-end gap-1">
+                      <Timer className="h-3 w-3" />
+                      {calcularTempoNaVaga(veiculo.dataEntrada.toString(), veiculo.dataSaida?.toString() || null)}
+                    </div>
                   </div>
                 </div>
               ))}
