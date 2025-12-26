@@ -1,14 +1,19 @@
-import { useState } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { ParkingSquare, Plus, Loader2, Edit, Trash2, Search } from "lucide-react";
+import { Plus, Loader2, Edit, Trash2, Search } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { Vaga, Filial } from "@shared/schema";
+import type { Vaga, Filial } from "@/shared/schema";
 import {
   Dialog,
   DialogContent,
@@ -24,372 +29,469 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
+
+type TipoVaga = {
+  Id: number;
+  Nome: string;
+};
+
+type NewVagaFormData = {
+  filialId: string;
+  tipoVagaId: number | "";
+  NomeVaga: string;
+  status: "livre" | "ocupada" | string;
+};
+
+type EditVagaFormData = {
+  filialId: string;
+  tipoVagaId: number | "";
+  NomeVaga: string;
+  status: "livre" | "ocupada" | string;
+};
 
 export default function VagasAdminPage() {
   const { toast } = useToast();
+
+  // =========================
+  // STATES
+  // =========================
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+
+
+  const [showTipoDialog, setShowTipoDialog] = useState(false);
+  const [novoTipoNome, setNovoTipoNome] = useState("");
+  const [editandoTipo, setEditandoTipo] = useState<TipoVaga | null>(null);
+
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+
   const [editingVaga, setEditingVaga] = useState<Vaga | null>(null);
   const [deletingVaga, setDeletingVaga] = useState<Vaga | null>(null);
+
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedFilialFilter, setSelectedFilialFilter] = useState<string>("all");
+  const [selectedFilialFilter, setSelectedFilialFilter] = useState("all");
 
-  const [formData, setFormData] = useState({
+  const [newFormData, setNewFormData] = useState<NewVagaFormData>({
     filialId: "",
-    numero: "",
-    descricao: "",
+    tipoVagaId: "",
+    NomeVaga: "",
+    status: "livre",
   });
 
-  const [editFormData, setEditFormData] = useState({
-    numero: "",
-    descricao: "",
+  const [editFormData, setEditFormData] = useState<EditVagaFormData>({
+    filialId: "",
+    tipoVagaId: "",
+    NomeVaga: "",
+    status: "livre",
   });
 
-  const { data: vagas, isLoading } = useQuery<Vaga[]>({
-    queryKey: ["/api/vagas/all"],
+  // =========================
+  // QUERIES
+  // =========================
+  const { data: vagas, isLoading: isLoadingVagas } = useQuery<Vaga[]>({
+    queryKey: ["/api/vagas"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/vagas");
+      return res.json();
+    },
   });
 
-  const { data: filiais } = useQuery<Filial[]>({
+  const { data: filiais, isLoading: isLoadingFiliais } = useQuery<Filial[]>({
     queryKey: ["/api/filiais"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/filiais");
+      return res.json();
+    },
   });
+
+  // ⚠️ Ajuste se o seu endpoint for outro.
+  const { data: tiposVaga, isLoading: isLoadingTipos } = useQuery<TipoVaga[]>({
+    queryKey: ["/api/tipo-vaga"],
+    queryFn: async () => {
+      try {
+        const res = await apiRequest("GET", "/api/tipo-vaga");
+        return res.json();
+      } catch {
+        const res2 = await apiRequest("GET", "/api/tipos-vaga");
+        return res2.json();
+      }
+    },
+  });
+
+  // =========================
+  // MUTATIONS
+  // =========================
+
+  const createTipoVagaMutation = useMutation({
+  mutationFn: async (Nome: string) => {
+    const res = await apiRequest("POST", "/api/tipo-vaga", { Nome });
+    return res.json();
+  },
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ["/api/tipo-vaga"] });
+    toast({ title: "Tipo de vaga criado" });
+    setNovoTipoNome("");
+    setShowTipoDialog(false);
+  },
+  });
+
+  const updateTipoVagaMutation = useMutation({
+  mutationFn: async ({ Id, Nome }: TipoVaga) => {
+    const res = await apiRequest("PUT", `/api/tipo-vaga/${Id}`, { Nome });
+    return res.json();
+  },
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ["/api/tipo-vaga"] });
+    toast({ title: "Tipo de vaga atualizado" });
+    setEditandoTipo(null);
+    setShowTipoDialog(false);
+  },
+  });
+
 
   const createVagaMutation = useMutation({
-    mutationFn: async (data: typeof formData) => {
-      const res = await apiRequest("POST", "/api/vagas", data, {
-        "X-Filial": data.filialId,
-      });
-      return await res.json();
+    mutationFn: async (data: NewVagaFormData) => {
+      if (!data.filialId || !data.tipoVagaId || !data.NomeVaga) {
+        throw new Error("Preencha filial, tipo e nome da vaga.");
+      }
+
+      const payload = {
+        filialId: data.filialId,
+        tipoVagaId: Number(data.tipoVagaId),
+        NomeVaga: data.NomeVaga,
+        status: data.status || "livre",
+      };
+
+      const res = await apiRequest("POST", "/api/vagas", payload);
+      return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/vagas/all"] });
       queryClient.invalidateQueries({ queryKey: ["/api/vagas"] });
-      toast({
-        title: "Vaga criada",
-        description: "Nova vaga adicionada com sucesso",
-      });
-      setFormData({
-        filialId: "",
-        numero: "",
-        descricao: "",
-      });
+      toast({ title: "Vaga criada com sucesso" });
+      setNewFormData({ filialId: "", tipoVagaId: "", NomeVaga: "", status: "livre" });
       setShowNewDialog(false);
     },
-    onError: (error: Error) => {
+    onError: (err: any) => {
       toast({
         title: "Erro ao criar vaga",
-        description: error.message,
+        description: err?.message || "Erro inesperado",
         variant: "destructive",
       });
     },
   });
 
   const updateVagaMutation = useMutation({
-    mutationFn: async ({ vagaId, filialId, ...data }: { vagaId: string; filialId: string; numero: string; descricao: string }) => {
-      const res = await apiRequest("PATCH", `/api/vagas/${vagaId}`, data, {
-        "X-Filial": filialId,
-      });
-      return await res.json();
+    mutationFn: async ({
+      vagaId,
+      filialId,
+      tipoVagaId,
+      NomeVaga,
+      status,
+    }: {
+      vagaId: number;
+      filialId: string;
+      tipoVagaId: number;
+      NomeVaga: string;
+      status: string;
+    }) => {
+      const payload = {
+        filialId, // (opcional no seu back, mas vamos mandar para manter consistente)
+        tipoVagaId: Number(tipoVagaId),
+        NomeVaga,
+        status,
+      };
+
+      const res = await apiRequest("PUT", `/api/vagas/${vagaId}`, payload);
+      return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/vagas/all"] });
       queryClient.invalidateQueries({ queryKey: ["/api/vagas"] });
-      toast({
-        title: "Vaga atualizada",
-        description: "Vaga atualizada com sucesso",
-      });
+      toast({ title: "Vaga atualizada com sucesso" });
       setShowEditDialog(false);
       setEditingVaga(null);
     },
-    onError: (error: Error) => {
+    onError: (err: any) => {
       toast({
         title: "Erro ao atualizar vaga",
-        description: error.message,
+        description: err?.message || "Erro inesperado",
         variant: "destructive",
       });
     },
   });
 
   const deleteVagaMutation = useMutation({
-    mutationFn: async ({ vagaId, filialId }: { vagaId: string; filialId: string }) => {
-      await apiRequest("DELETE", `/api/vagas/${vagaId}`, undefined, {
-        "X-Filial": filialId,
-      });
+    mutationFn: async ({ vagaId, filialId }: { vagaId: number; filialId: string }) => {
+      // ✅ Seu back exige filialId no BODY
+      const res = await apiRequest("DELETE", `/api/vagas/${vagaId}`, { filialId });
+      return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/vagas/all"] });
       queryClient.invalidateQueries({ queryKey: ["/api/vagas"] });
-      toast({
-        title: "Vaga deletada",
-        description: "Vaga removida com sucesso",
-      });
+      toast({ title: "Vaga removida com sucesso" });
       setShowDeleteDialog(false);
       setDeletingVaga(null);
     },
-    onError: (error: Error) => {
+    onError: (err: any) => {
       toast({
-        title: "Erro ao deletar vaga",
-        description: error.message,
+        title: "Erro ao remover vaga",
+        description: err?.message || "Erro inesperado",
         variant: "destructive",
       });
     },
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    createVagaMutation.mutate(formData);
-  };
+  const importVagasMutation = useMutation({
+  mutationFn: async (file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
 
-  const handleEditSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (editingVaga) {
-      updateVagaMutation.mutate({
-        vagaId: editingVaga.id,
-        filialId: editingVaga.filialId,
-        numero: editFormData.numero,
-        descricao: editFormData.descricao,
-      });
-    }
-  };
+    const res = await fetch("http://localhost:5000/api/vagas/import", {
+      method: "POST",
+      body: formData,
+    });
 
-  const handleDeleteConfirm = () => {
-    if (deletingVaga) {
-      deleteVagaMutation.mutate({
-        vagaId: deletingVaga.id,
-        filialId: deletingVaga.filialId,
-      });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Erro ao importar vagas");
     }
-  };
+
+    return res.json();
+  },
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ["/api/vagas"] });
+    toast({ title: "Vagas importadas com sucesso" });
+    setShowImportDialog(false);
+    setImportFile(null);
+  },
+  onError: (err: any) => {
+    toast({
+      title: "Erro na importação",
+      description: err.message,
+      variant: "destructive",
+    });
+  },
+});
+
+
+  // =========================
+  // HELPERS
+  // =========================
+  const getFilialNome = (filialId: string) =>
+    filiais?.find((f) => f.id === filialId)?.nome || "Desconhecida";
+
+  const getTipoNome = (tipoVagaId: any) =>
+    tiposVaga?.find((t) => t.Id === Number(tipoVagaId))?.Nome || "-";
+
+  const filteredVagas = useMemo(() => {
+    const list = vagas ?? [];
+
+    return list.filter((vaga) => {
+      const matchesSearch =
+        vaga.NomeVaga?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false;
+
+      const matchesFilial =
+        selectedFilialFilter === "all" || vaga.filialId === selectedFilialFilter;
+
+      return matchesSearch && matchesFilial;
+    });
+  }, [vagas, searchTerm, selectedFilialFilter]);
 
   const openEditDialog = (vaga: Vaga) => {
     setEditingVaga(vaga);
     setEditFormData({
-      numero: vaga.numero,
-      descricao: vaga.descricao || "",
+      filialId: vaga.filialId,
+      tipoVagaId: (vaga as any).tipoVagaId ?? "",
+      NomeVaga: vaga.NomeVaga,
+      status: (vaga as any).status || "livre",
     });
     setShowEditDialog(true);
   };
 
-  const openDeleteDialog = (vaga: Vaga) => {
-    setDeletingVaga(vaga);
-    setShowDeleteDialog(true);
-  };
-
-  const filteredVagas = vagas?.filter((vaga) => {
-    const matchesSearch = vaga.numero.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (vaga.descricao?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false);
-    const matchesFilial = selectedFilialFilter === "all" || vaga.filialId === selectedFilialFilter;
-    return matchesSearch && matchesFilial;
-  });
-
-  const getFilialNome = (filialId: string) => {
-    return filiais?.find((f) => f.id === filialId)?.nome || "Desconhecida";
-  };
-
-  const vagasPorFilial = filiais?.map((filial) => ({
-    filial,
-    count: vagas?.filter((v) => v.filialId === filial.id).length || 0,
-    livres: vagas?.filter((v) => v.filialId === filial.id && v.status === "livre").length || 0,
-    ocupadas: vagas?.filter((v) => v.filialId === filial.id && v.status === "ocupada").length || 0,
-  }));
+  // =========================
+  // UI
+  // =========================
+  const isBusy = isLoadingVagas || isLoadingFiliais || isLoadingTipos;
 
   return (
     <div className="p-6 space-y-6">
-      {/* Header */}
+
+      <input
+  ref={fileInputRef}
+  type="file"
+  accept=".xlsx,.xls"
+  hidden
+  onChange={(e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setImportFile(file);
+      setShowImportDialog(true);
+    }
+  }}
+/>
+
+      {/* HEADER */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Gestão de Vagas</h1>
-          <p className="text-muted-foreground">Gerencie as vagas de estacionamento de todas as filiais</p>
+          <h1 className="text-3xl font-bold">Gestão de Vagas</h1>
+          <p className="text-muted-foreground">
+            Gerencie as vagas de estacionamento de todas as filiais
+          </p>
         </div>
+
+        <div className="flex gap-2">
         <Button
-          onClick={() => setShowNewDialog(true)}
-          data-testid="button-nova-vaga"
+          variant="outline"
+          onClick={() => fileInputRef.current?.click()}
         >
+          Importar Excel
+        </Button>
+
+        <Button onClick={() => setShowNewDialog(true)}>
           <Plus className="mr-2 h-4 w-4" />
           Nova Vaga
         </Button>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Total de Vagas</CardDescription>
-            <CardTitle className="text-3xl">{vagas?.length || 0}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Vagas Livres</CardDescription>
-            <CardTitle className="text-3xl text-green-600">
-              {vagas?.filter((v) => v.status === "livre").length || 0}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Vagas Ocupadas</CardDescription>
-            <CardTitle className="text-3xl text-primary">
-              {vagas?.filter((v) => v.status === "ocupada").length || 0}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Filiais com Vagas</CardDescription>
-            <CardTitle className="text-3xl">
-              {new Set(vagas?.map((v) => v.filialId)).size || 0}
-            </CardTitle>
-          </CardHeader>
-        </Card>
       </div>
 
-      {/* Vagas por Filial */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Vagas por Filial</CardTitle>
-          <CardDescription>Distribuição de vagas por filial</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {vagasPorFilial?.map(({ filial, count, livres, ocupadas }) => (
-              <div key={filial.id} className="flex items-center justify-between p-4 border rounded-lg">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-semibold">{filial.nome}</h3>
-                    <Badge variant={filial.ativo ? "default" : "secondary"}>
-                      {filial.ativo ? "Ativa" : "Inativa"}
-                    </Badge>
-                  </div>
-                  <p className="text-sm text-muted-foreground">{filial.codigo}</p>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="text-right">
-                    <p className="text-sm text-muted-foreground">Total</p>
-                    <p className="text-2xl font-bold">{count}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm text-muted-foreground">Livres</p>
-                    <p className="text-2xl font-bold text-green-600">{livres}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm text-muted-foreground">Ocupadas</p>
-                    <p className="text-2xl font-bold text-primary">{ocupadas}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Filters */}
+      {/* FILTROS */}
       <Card>
         <CardHeader>
           <CardTitle>Filtros</CardTitle>
+          <CardDescription>Busque e filtre por filial</CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="search">Buscar</Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="search"
-                  placeholder="Número ou descrição da vaga..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9"
-                  data-testid="input-search-vaga"
-                />
-              </div>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Buscar</Label>
+            <div className="flex gap-2">
+              <Input
+                placeholder="Ex: A1, 12, PÁTIO..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+              <Button variant="outline" size="icon" title="Buscar">
+                <Search className="h-4 w-4" />
+              </Button>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="filial-filter">Filial</Label>
-              <Select value={selectedFilialFilter} onValueChange={setSelectedFilialFilter}>
-                <SelectTrigger id="filial-filter" data-testid="select-filial-filter">
-                  <SelectValue placeholder="Todas as filiais" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas as filiais</SelectItem>
-                  {filiais?.map((filial) => (
-                    <SelectItem key={filial.id} value={filial.id}>
-                      {filial.nome}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Filial</Label>
+            <Select
+              value={selectedFilialFilter}
+              onValueChange={setSelectedFilialFilter}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione a filial" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas</SelectItem>
+                {(filiais ?? []).map((f) => (
+                  <SelectItem key={f.id} value={f.id}>
+                    {f.nome}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </CardContent>
       </Card>
 
-      {/* Vagas Table */}
+
+      <Card>
+  <CardHeader className="flex flex-row items-center justify-between">
+    <div>
+      <CardTitle>Tipos de Vaga</CardTitle>
+      <CardDescription>Cadastre e gerencie os tipos de vaga</CardDescription>
+      
+    </div>
+
+    <Button size="sm" onClick={() => setShowTipoDialog(true)}>
+      <Plus className="h-4 w-4 mr-2" />
+      Novo Tipo
+    </Button>
+  </CardHeader>
+
+  <CardContent className="space-y-2">
+    {(tiposVaga ?? []).map((tipo) => (
+      <div
+        key={tipo.Id}
+        className="flex items-center justify-between border rounded-md p-3"
+      >
+        <span className="font-medium">{tipo.Nome}</span>
+
+        <Button
+          size="icon"
+          variant="outline"
+          onClick={() => {
+            setEditandoTipo(tipo);
+            setNovoTipoNome(tipo.Nome);
+            setShowTipoDialog(true);
+          }}
+        >
+          <Edit className="h-4 w-4" />
+        </Button>
+      </div>
+    ))}
+  </CardContent>
+</Card>
+
+
+      {/* LISTA */}
       <Card>
         <CardHeader>
           <CardTitle>Todas as Vagas</CardTitle>
           <CardDescription>
-            {filteredVagas?.length || 0} vaga(s) encontrada(s)
+            {filteredVagas.length} vaga(s) encontrada(s)
           </CardDescription>
         </CardHeader>
+
         <CardContent>
-          {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          {isBusy ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin" />
             </div>
-          ) : filteredVagas && filteredVagas.length > 0 ? (
+          ) : filteredVagas.length === 0 ? (
+            <p className="text-muted-foreground text-center py-8">
+              Nenhuma vaga encontrada.
+            </p>
+          ) : (
             <div className="space-y-2">
               {filteredVagas.map((vaga) => (
                 <div
                   key={vaga.id}
-                  className="flex items-center justify-between p-4 border rounded-lg hover-elevate"
-                  data-testid={`vaga-item-${vaga.id}`}
+                  className="flex items-center justify-between p-4 border rounded-lg"
                 >
-                  <div className="flex items-center gap-4 flex-1">
-                    <div className="p-2 bg-primary/10 rounded-lg">
-                      <ParkingSquare className="h-6 w-6 text-primary" />
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold">Vaga {vaga.NomeVaga}</h3>
+                      <Badge variant="secondary">{getTipoNome((vaga as any).tipoVagaId)}</Badge>
+                      <Badge variant={(vaga as any).status === "livre" ? "default" : "outline"}>
+                        {(vaga as any).status || "livre"}
+                      </Badge>
                     </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-semibold">Vaga {vaga.numero}</h3>
-                        <Badge variant={vaga.status === "livre" ? "default" : "secondary"}>
-                          {vaga.status === "livre" ? "Livre" : "Ocupada"}
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        {getFilialNome(vaga.filialId)}
-                      </p>
-                      {vaga.descricao && (
-                        <p className="text-sm text-muted-foreground mt-1">{vaga.descricao}</p>
-                      )}
-                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      {getFilialNome(vaga.filialId)}
+                    </p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => openEditDialog(vaga)}
-                      data-testid={`button-edit-vaga-${vaga.id}`}
-                    >
+
+                  <div className="flex gap-2">
+                    <Button size="icon" variant="outline" onClick={() => openEditDialog(vaga)}>
                       <Edit className="h-4 w-4" />
                     </Button>
+
                     <Button
-                      variant="outline"
                       size="icon"
-                      onClick={() => openDeleteDialog(vaga)}
-                      disabled={vaga.status === "ocupada"}
-                      data-testid={`button-delete-vaga-${vaga.id}`}
+                      variant="destructive"
+                      onClick={() => {
+                        setDeletingVaga(vaga);
+                        setShowDeleteDialog(true);
+                      }}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -397,196 +499,320 @@ export default function VagasAdminPage() {
                 </div>
               ))}
             </div>
-          ) : (
-            <div className="text-center py-12">
-              <ParkingSquare className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-              <p className="text-muted-foreground">Nenhuma vaga encontrada</p>
-            </div>
           )}
         </CardContent>
       </Card>
 
-      {/* New Vaga Dialog */}
+      {/* =========================
+          NOVA VAGA (DIALOG)
+      ========================= */}
       <Dialog open={showNewDialog} onOpenChange={setShowNewDialog}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Nova Vaga</DialogTitle>
             <DialogDescription>
-              Adicione uma nova vaga de estacionamento
+              Selecione a filial, tipo e informe o nome/número da vaga.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSubmit}>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="filial">Filial *</Label>
-                <Select
-                  value={formData.filialId}
-                  onValueChange={(value) => setFormData({ ...formData, filialId: value })}
-                >
-                  <SelectTrigger id="filial" data-testid="select-filial">
-                    <SelectValue placeholder="Selecione a filial" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {filiais?.filter(f => f.ativo).map((filial) => (
-                      <SelectItem key={filial.id} value={filial.id}>
-                        {filial.nome}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="numero">Número da Vaga *</Label>
-                <Input
-                  id="numero"
-                  value={formData.numero}
-                  onChange={(e) => setFormData({ ...formData, numero: e.target.value })}
-                  placeholder="Ex: A-01, B-15, 101"
-                  required
-                  data-testid="input-numero"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="descricao">Descrição (Opcional)</Label>
-                <Textarea
-                  id="descricao"
-                  value={formData.descricao}
-                  onChange={(e) => setFormData({ ...formData, descricao: e.target.value })}
-                  placeholder="Ex: Próximo ao portão principal, Vaga coberta"
-                  data-testid="input-descricao"
-                />
-              </div>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Filial</Label>
+              <Select
+                value={newFormData.filialId}
+                onValueChange={(v) => setNewFormData((p) => ({ ...p, filialId: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione a filial" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(filiais ?? []).map((f) => (
+                    <SelectItem key={f.id} value={f.id}>
+                      {f.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <DialogFooter className="mt-6">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setShowNewDialog(false)}
-                data-testid="button-cancelar-nova"
+
+            <div className="space-y-2">
+              <Label>Tipo de Vaga</Label>
+              <Select
+                value={newFormData.tipoVagaId === "" ? "" : String(newFormData.tipoVagaId)}
+                onValueChange={(v) =>
+                  setNewFormData((p) => ({ ...p, tipoVagaId: Number(v) }))
+                }
               >
-                Cancelar
-              </Button>
-              <Button
-                type="submit"
-                disabled={createVagaMutation.isPending || !formData.filialId || !formData.numero}
-                data-testid="button-criar-vaga"
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(tiposVaga ?? []).map((t) => (
+                    <SelectItem key={t.Id} value={String(t.Id)}>
+                      {t.Nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Nome / Número da Vaga</Label>
+              <Input
+                value={newFormData.NomeVaga}
+                onChange={(e) =>
+                  setNewFormData((p) => ({ ...p, NomeVaga: e.target.value }))
+                }
+                placeholder="Ex: A12"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Status</Label>
+              <Select
+                value={newFormData.status}
+                onValueChange={(v) =>
+                  setNewFormData((p) => ({ ...p, status: v }))
+                }
               >
-                {createVagaMutation.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Criando...
-                  </>
-                ) : (
-                  "Criar Vaga"
-                )}
-              </Button>
-            </DialogFooter>
-          </form>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="livre">livre</SelectItem>
+                  <SelectItem value="ocupada">ocupada</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              onClick={() => createVagaMutation.mutate(newFormData)}
+              disabled={createVagaMutation.isPending}
+            >
+              {createVagaMutation.isPending ? "Salvando..." : "Criar Vaga"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Edit Vaga Dialog */}
+      {/* =========================
+          EDITAR VAGA (DIALOG)
+      ========================= */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Editar Vaga</DialogTitle>
-            <DialogDescription>
-              Atualize as informações da vaga
-            </DialogDescription>
+            <DialogDescription>Atualize os dados da vaga.</DialogDescription>
           </DialogHeader>
-          {editingVaga && (
-            <form onSubmit={handleEditSubmit}>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Filial</Label>
-                  <Input
-                    value={getFilialNome(editingVaga.filialId)}
-                    disabled
-                    className="bg-muted"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="edit-numero">Número da Vaga *</Label>
-                  <Input
-                    id="edit-numero"
-                    value={editFormData.numero}
-                    onChange={(e) => setEditFormData({ ...editFormData, numero: e.target.value })}
-                    placeholder="Ex: A-01, B-15, 101"
-                    required
-                    data-testid="input-edit-numero"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="edit-descricao">Descrição</Label>
-                  <Textarea
-                    id="edit-descricao"
-                    value={editFormData.descricao}
-                    onChange={(e) => setEditFormData({ ...editFormData, descricao: e.target.value })}
-                    placeholder="Ex: Próximo ao portão principal, Vaga coberta"
-                    data-testid="input-edit-descricao"
-                  />
-                </div>
-              </div>
-              <DialogFooter className="mt-6">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setShowEditDialog(false)}
-                  data-testid="button-cancelar-edit"
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={updateVagaMutation.isPending || !editFormData.numero}
-                  data-testid="button-salvar-vaga"
-                >
-                  {updateVagaMutation.isPending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Salvando...
-                    </>
-                  ) : (
-                    "Salvar Alterações"
-                  )}
-                </Button>
-              </DialogFooter>
-            </form>
-          )}
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Filial</Label>
+              <Select
+                value={editFormData.filialId}
+                onValueChange={(v) => setEditFormData((p) => ({ ...p, filialId: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione a filial" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(filiais ?? []).map((f) => (
+                    <SelectItem key={f.id} value={f.id}>
+                      {f.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Tipo de Vaga</Label>
+              <Select
+                value={editFormData.tipoVagaId === "" ? "" : String(editFormData.tipoVagaId)}
+                onValueChange={(v) =>
+                  setEditFormData((p) => ({ ...p, tipoVagaId: Number(v) }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(tiposVaga ?? []).map((t) => (
+                    <SelectItem key={t.Id} value={String(t.Id)}>
+                      {t.Nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Nome / Número da Vaga</Label>
+              <Input
+                value={editFormData.NomeVaga}
+                onChange={(e) =>
+                  setEditFormData((p) => ({ ...p, NomeVaga: e.target.value }))
+                }
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Status</Label>
+              <Select
+                value={editFormData.status}
+                onValueChange={(v) => setEditFormData((p) => ({ ...p, status: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="livre">livre</SelectItem>
+                  <SelectItem value="ocupada">ocupada</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              onClick={() => {
+                if (!editingVaga) return;
+                if (!editFormData.filialId || !editFormData.tipoVagaId) {
+                  toast({
+                    title: "Preencha filial e tipo",
+                    variant: "destructive",
+                  });
+                  return;
+                }
+
+                updateVagaMutation.mutate({
+                  vagaId: Number(editingVaga.id),
+                  filialId: editFormData.filialId,
+                  tipoVagaId: Number(editFormData.tipoVagaId),
+                  NomeVaga: editFormData.NomeVaga,
+                  status: editFormData.status,
+                });
+              }}
+              disabled={updateVagaMutation.isPending}
+            >
+              {updateVagaMutation.isPending ? "Salvando..." : "Salvar"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
-            <AlertDialogDescription>
-              Tem certeza que deseja deletar a vaga <strong>{deletingVaga?.numero}</strong>?
-              Esta ação não pode ser desfeita.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel data-testid="button-cancelar-delete">
+
+        {/* =========================
+          MODAL DE CRIAR / EDITAR TIPO
+      ========================= */}
+      <Dialog open={showTipoDialog} onOpenChange={setShowTipoDialog}>
+  <DialogContent>
+    <DialogHeader>
+      <DialogTitle>
+        {editandoTipo ? "Editar Tipo de Vaga" : "Novo Tipo de Vaga"}
+      </DialogTitle>
+    </DialogHeader>
+
+    <div className="space-y-2">
+      <Label>Nome do Tipo</Label>
+      <Input
+        value={novoTipoNome}
+        onChange={(e) => setNovoTipoNome(e.target.value)}
+        placeholder="Ex: Caminhão, Carreta..."
+      />
+    </div>
+
+    <DialogFooter>
+      <Button
+        onClick={() => {
+          if (!novoTipoNome.trim()) return;
+
+          if (editandoTipo) {
+            updateTipoVagaMutation.mutate({
+              Id: editandoTipo.Id,
+              Nome: novoTipoNome,
+            });
+          } else {
+            createTipoVagaMutation.mutate(novoTipoNome);
+          }
+        }}
+      >
+        Salvar
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
+
+
+<Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
+  <DialogContent>
+    <DialogHeader>
+      <DialogTitle>Importar Vagas</DialogTitle>
+      <DialogDescription>
+        Envie um arquivo Excel para cadastrar vagas em massa.
+      </DialogDescription>
+    </DialogHeader>
+
+    <p className="text-sm">
+      Arquivo selecionado: <strong>{importFile?.name}</strong>
+    </p>
+
+    <DialogFooter>
+      <Button
+        onClick={() => {
+          if (!importFile) {
+            toast({
+              title: "Selecione um arquivo",
+              variant: "destructive",
+            });
+            return;
+          }
+          importVagasMutation.mutate(importFile);
+        }}
+        disabled={importVagasMutation.isPending}
+      >
+        {importVagasMutation.isPending ? "Importando..." : "Importar"}
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
+
+      {/* =========================
+          EXCLUIR (DIALOG)
+      ========================= */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Excluir Vaga</DialogTitle>
+            <DialogDescription>
+              Tem certeza que deseja excluir a vaga{" "}
+              <strong>{deletingVaga?.NomeVaga}</strong>?
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
               Cancelar
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteConfirm}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              data-testid="button-confirmar-delete"
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (!deletingVaga) return;
+                deleteVagaMutation.mutate({
+                  vagaId: Number(deletingVaga.id),
+                  filialId: deletingVaga.filialId,
+                });
+              }}
+              disabled={deleteVagaMutation.isPending}
             >
-              {deleteVagaMutation.isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Deletando...
-                </>
-              ) : (
-                "Deletar"
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+              {deleteVagaMutation.isPending ? "Excluindo..." : "Excluir"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
+

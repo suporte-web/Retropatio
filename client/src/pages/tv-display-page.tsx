@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { useWebSocket } from "@/hooks/use-websocket";
 import { Bell, TruckIcon } from "lucide-react";
-import type { Chamada, Veiculo } from "@shared/schema";
+import type { Chamada, Veiculo } from "@/shared/schema";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 

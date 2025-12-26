@@ -12,8 +12,10 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import type { Chamada, Veiculo } from "@shared/schema";
+import type { Chamada, Veiculo } from "@/shared/schema";
 import { Badge } from "@/components/ui/badge";
+
+
 
 export default function ChamadasPage() {
   const { toast } = useToast();
@@ -124,7 +126,7 @@ export default function ChamadasPage() {
                   </SelectTrigger>
                   <SelectContent>
                     {veiculosAtivos?.map((veiculo) => (
-                      <SelectItem key={veiculo.id} value={veiculo.id}>
+                      <SelectItem key={veiculo.id} value={String(veiculo.id)}>
                         {veiculo.placaCavalo} - {veiculo.motorista}
                       </SelectItem>
                     ))}
@@ -228,7 +230,7 @@ export default function ChamadasPage() {
                       </div>
                     </div>
                     <Button
-                      onClick={() => atenderChamadaMutation.mutate(chamada.id)}
+                      onClick={() => atenderChamadaMutation.mutate(String(chamada.id))}
                       disabled={atenderChamadaMutation.isPending}
                       data-testid={`button-atender-${chamada.id}`}
                     >

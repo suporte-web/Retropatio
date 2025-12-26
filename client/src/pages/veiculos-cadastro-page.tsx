@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Truck, Plus, Loader2, Edit, Trash2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { VeiculoCadastro } from "@shared/schema";
+import type { VeiculoCadastro } from "@/shared/schema";
 import {
   Dialog,
   DialogContent,

@@ -19,7 +19,8 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import type { Veiculo, Filial } from "@shared/schema";
+import type { Veiculo, Filial } from "@/shared/schema";
+
 
 export default function ClienteChamadasPage() {
   const { toast } = useToast();
@@ -85,7 +86,7 @@ export default function ClienteChamadasPage() {
     }
 
     createChamadaMutation.mutate({
-      veiculoId: selectedVeiculo.id,
+      veiculoId: String(selectedVeiculo.id),
       motivo: motivo.trim(),
     });
   };

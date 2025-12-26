@@ -4,8 +4,10 @@ import { Truck, Clock, CheckCircle2, Loader2, TrendingUp, Timer } from "lucide-r
 import { StatusBadge } from "@/components/status-badge";
 import { format, subDays, startOfDay, differenceInMinutes } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import type { Veiculo } from "@shared/schema";
+import type { Veiculo } from "@/shared/schema";
 import { useState, useEffect } from "react";
+import { Badge } from "@/components/ui/badge";
+
 import {
   BarChart,
   Bar,
@@ -280,6 +282,7 @@ export default function ClienteDashboardPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <StatusBadge status={veiculo.situacao} type="veiculo" />
+                      <Badge variant="outline">{veiculo.situacao}</Badge>
                     </div>
                   </div>
                   <div className="text-right text-sm text-muted-foreground space-y-1">

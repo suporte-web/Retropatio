@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Building2, Plus, Loader2, Edit, Trash2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { Fornecedor } from "@shared/schema";
+import type { Fornecedor } from "@/shared/schema";
 import {
   Dialog,
   DialogContent,
@@ -21,8 +21,7 @@ import { Badge } from "@/components/ui/badge";
 
 export default function FornecedoresPage() {
   const { toast } = useToast();
-  
-  
+
   const selectedFilial = localStorage.getItem("selected_filial");
 
   const [showNewDialog, setShowNewDialog] = useState(false);
@@ -34,12 +33,12 @@ export default function FornecedoresPage() {
     nome: "",
     cnpj: "",
     ativo: true,
-});
+  });
 
   const { data: fornecedores, isLoading } = useQuery<Fornecedor[]>({
     queryKey: ["/api/fornecedores", selectedFilial],
     enabled: !!selectedFilial,
-});
+  });
 
   const createFornecedorMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
@@ -51,7 +50,7 @@ export default function FornecedoresPage() {
       toast({
         title: "Fornecedor criado",
         description: "Novo fornecedor adicionado com sucesso",
-    });
+      });
       setFormData({ nome: "", cnpj: "", ativo: true });
       setShowNewDialog(false);
     },
@@ -60,9 +59,9 @@ export default function FornecedoresPage() {
         title: "Erro ao criar fornecedor",
         description: error.message,
         variant: "destructive",
-    });
+      });
     },
-});
+  });
 
   const updateFornecedorMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<Fornecedor> }) => {
@@ -74,7 +73,7 @@ export default function FornecedoresPage() {
       toast({
         title: "Fornecedor atualizado",
         description: "Dados do fornecedor atualizados com sucesso",
-    });
+      });
       setShowEditDialog(false);
       setEditingFornecedor(null);
     },
@@ -83,9 +82,9 @@ export default function FornecedoresPage() {
         title: "Erro ao atualizar fornecedor",
         description: error.message,
         variant: "destructive",
-    });
+      });
     },
-});
+  });
 
   const deleteFornecedorMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -97,16 +96,16 @@ export default function FornecedoresPage() {
       toast({
         title: "Fornecedor removido",
         description: "Fornecedor removido com sucesso",
-    });
+      });
     },
     onError: (error: Error) => {
       toast({
         title: "Erro ao remover fornecedor",
         description: error.message,
         variant: "destructive",
-    });
+      });
     },
-});
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -128,7 +127,7 @@ export default function FornecedoresPage() {
           cnpj: editingFornecedor.cnpj,
           ativo: editingFornecedor.ativo,
         },
-    });
+      });
     }
   };
 
@@ -138,9 +137,10 @@ export default function FornecedoresPage() {
     }
   };
 
-  const filteredFornecedores = fornecedores?.filter((f) =>
-    f.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    f.cnpj.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredFornecedores = fornecedores?.filter(
+    (f) =>
+      f.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      f.cnpj.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const fornecedoresAtivos = fornecedores?.filter((f) => f.ativo).length || 0;
@@ -335,6 +335,7 @@ export default function FornecedoresPage() {
                   required
                 />
               </div>
+
               <div className="space-y-2">
                 <Label htmlFor="edit-cnpj">CNPJ *</Label>
                 <Input
@@ -345,21 +346,31 @@ export default function FornecedoresPage() {
                   required
                 />
               </div>
+
+              {/* STATUS */}
               <div className="space-y-2">
                 <Label htmlFor="edit-ativo">Status *</Label>
+
                 <Select
                   value={editingFornecedor.ativo ? "true" : "false"}
-                  onValueChange={(value) => setEditingFornecedor({ ...editingFornecedor, ativo: value === "true" })}
+                  onValueChange={(value) =>
+                    setEditingFornecedor({
+                      ...editingFornecedor,
+                      ativo: value === "true",
+                    })
+                  }
                 >
                   <SelectTrigger data-testid="select-edit-ativo">
                     <SelectValue />
                   </SelectTrigger>
+
                   <SelectContent>
                     <SelectItem value="true">Ativo</SelectItem>
                     <SelectItem value="false">Inativo</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setShowEditDialog(false)}>
                   Cancelar

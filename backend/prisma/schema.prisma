@@ -1,0 +1,184 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id         String       @id @default(uuid()) @map("id")
+  username   String       @unique @map("username")
+  email      String       @unique @map("email")
+  password   String       @map("password")
+  role       String       @map("role")
+  ativo      Boolean      @default(true) @map("ativo")
+  filialId   String?
+  createdAt  DateTime     @default(now()) @map("createdAt")
+  updatedAt  DateTime     @updatedAt @map("updatedAt")
+  nome       String?      @map("nome")
+  Filial     Filial?      @relation(fields: [filialId], references: [id])
+  permissoes UserFilial[]
+
+  @@map("User")
+}
+
+model Filial {
+  id         String       @id @default(uuid()) @map("id")
+  nome       String       @map("nome")
+  codigo     String       @unique @map("codigo")
+  endereco   String       @map("endereco")
+  ativo      Boolean      @default(true) @map("ativo")
+  createdAt  DateTime     @default(now()) @map("createdAt")
+  updatedAt  DateTime     @updatedAt @map("updatedAt")
+  entradas   Entrada[]
+  User       User[]
+  usuarios   UserFilial[]
+  vagas      Vaga[]
+  Veiculo    Veiculo[]
+  visitantes Visitante[]
+
+  @@map("Filial")
+}
+
+model TipoVaga {
+  Id    Int    @id @default(autoincrement()) @map("Id")
+  Nome  String @unique @map("Nome") @db.VarChar(100)
+  Vagas Vaga[]
+
+  @@map("TipoVaga")
+}
+
+model Vaga {
+  id         Int       @id @default(autoincrement()) @map("id")
+  filialId   String    @map("filialId")
+  tipoVagaId Int       @map("tipoVagaId")
+  NomeVaga   String    @map("NomeVaga") @db.VarChar(50)
+  status     String?   @default("livre") @map("status")
+  entradas   Entrada[]
+  filial     Filial    @relation(fields: [filialId], references: [id])
+  tipoVaga   TipoVaga  @relation(fields: [tipoVagaId], references: [Id])
+  Veiculo    Veiculo[]
+
+  @@map("Vaga")
+}
+
+model Entrada {
+  id                   Int       @id @default(autoincrement())
+  filialId             String
+  vagaId               Int
+  placaCavalo          String
+  placaCarreta         String?
+  motorista            String
+  proprietario         String?
+  tipo                 String
+  tipoVeiculoCategoria String?
+  tipoProprietario     String?
+  cliente              String?
+  transportadora       String?
+  statusCarga          String?
+  doca                 String?
+  valor                Float?
+  cte                  String?
+  nf                   String?
+  lacre                String?
+  cpfMotorista         String?
+  observacoes          String?
+  multi                Boolean?  @default(false)
+  status               String?   @default("ativo")
+  dataEntrada          DateTime? @default(now())
+  dataSaida            DateTime?
+
+  filial Filial @relation(fields: [filialId], references: [id])
+  vaga   Vaga   @relation(fields: [vagaId], references: [id])
+
+  // ⭐ RELACIONAMENTO COM VEÍCULO
+  veiculoId String?
+  veiculo   Veiculo? @relation(fields: [veiculoId], references: [id])
+
+  @@map("Entrada")
+}
+
+model Visitante {
+  id           Int       @id @default(autoincrement()) @map("id")
+  nome         String    @map("nome")
+  cpf          String    @map("cpf")
+  empresa      String?   @map("empresa")
+  tipoVisita   String    @map("tipoVisita")
+  motivoVisita String?   @map("motivoVisita")
+  status       String?   @default("aguardando") @map("status")
+  dataEntrada  DateTime? @map("dataEntrada") @db.Timestamp(6)
+  dataSaida    DateTime? @map("dataSaida") @db.Timestamp(6)
+  filialId     String    @map("filialId")
+  filial       Filial    @relation(fields: [filialId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_visitante_filial")
+
+  @@index([cpf], map: "idx_visitante_cpf")
+  @@index([filialId], map: "idx_visitante_filial")
+  @@map("Visitante")
+}
+
+model UserFilial {
+  id        String    @id @default(uuid()) @map("id")
+  userId    String    @map("userId")
+  filialId  String    @map("filialId")
+  createdAt DateTime? @default(now()) @map("createdAt") @db.Timestamp(6)
+  filial    Filial    @relation(fields: [filialId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([userId, filialId])
+  @@map("UserFilial")
+}
+
+model Fornecedor {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @map("id") @db.Uuid
+  nome      String   @map("nome")
+  cnpj      String   @unique @map("cnpj")
+  ativo     Boolean  @default(true) @map("ativo")
+  createdAt DateTime @default(now()) @map("createdAt") @db.Timestamp(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updatedAt") @db.Timestamp(6)
+
+  @@map("Fornecedor")
+}
+
+model Veiculo {
+  id             String  @id @default(uuid())
+  placaCavalo    String
+  placaCarreta   String?
+  motorista      String
+  cpfMotorista   String?
+  transportadora String?
+  cliente        String?
+
+  cte   String?
+  nf    String?
+  lacre String?
+
+  dataEntrada DateTime
+  dataSaida   DateTime?
+
+  situacao String
+  filialId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // ⭐ RELACIONAMENTO INVERSO OBRIGATÓRIO
+  entradas Entrada[]
+  filial   Filial    @relation(fields: [filialId], references: [id])
+  vaga     Vaga?     @relation(fields: [vagaId], references: [id])
+  vagaId   Int?
+}
+
+model AuditLog {
+  id          Int      @id @default(autoincrement())
+  acao        String
+  entidade    String
+  dadosAntes  String?  @db.Text
+  dadosDepois String?  @db.Text
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+
+  @@map("audit_logs")
+}
+

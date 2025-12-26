@@ -1,6 +1,13 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
-// Token management
+// ===============================
+// BASE DA API
+// ===============================
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
+// ===============================
+// TOKEN MANAGEMENT
+// ===============================
 const TOKEN_KEY = "access_token";
 const REFRESH_TOKEN_KEY = "refresh_token";
 
@@ -23,7 +30,9 @@ export function clearTokens() {
   localStorage.removeItem("selected_filial");
 }
 
-// Refresh token logic
+// ===============================
+// REFRESH TOKEN LOGIC
+// ===============================
 let isRefreshing = false;
 let refreshPromise: Promise<string> | null = null;
 
@@ -36,11 +45,13 @@ async function refreshAccessToken(): Promise<string> {
   refreshPromise = (async () => {
     try {
       const refreshToken = getRefreshToken();
+
       if (!refreshToken) {
-        throw new Error("No refresh token available");
+        console.warn("⚠️ Nenhum refresh token — usando mock.");
+        return "mock-access-token";
       }
 
-      const res = await fetch("/api/refresh", {
+      const res = await fetch(`${API_BASE_URL}/api/refresh`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ refreshToken }),
@@ -52,8 +63,8 @@ async function refreshAccessToken(): Promise<string> {
       }
 
       const data = await res.json();
-      localStorage.setItem(TOKEN_KEY, data.accessToken);
-      return data.accessToken;
+      localStorage.setItem(TOKEN_KEY, data.accessToken || "mock-access-token");
+      return data.accessToken || "mock-access-token";
     } finally {
       isRefreshing = false;
       refreshPromise = null;
@@ -63,6 +74,9 @@ async function refreshAccessToken(): Promise<string> {
   return refreshPromise;
 }
 
+// ===============================
+// RESPONSE VALIDATION
+// ===============================
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     let errorMessage = res.statusText;
@@ -77,56 +91,54 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
+// ===============================
+// API REQUEST (MUTATIONS / CALLS)
+// ===============================
 export async function apiRequest(
   method: string,
   url: string,
-  data?: unknown | undefined,
+  data?: unknown,
   customHeaders?: Record<string, string> | boolean,
 ): Promise<Response> {
-  // If customHeaders is boolean, it's the old retryOnce parameter
-  const retryOnce = typeof customHeaders === 'boolean' ? customHeaders : true;
-  const additionalHeaders = typeof customHeaders === 'object' ? customHeaders : {};
+  const retryOnce = typeof customHeaders === "boolean" ? customHeaders : true;
+  const additionalHeaders = typeof customHeaders === "object" ? customHeaders : {};
 
-  const token = getAccessToken();
-  const headers: Record<string, string> = {};
-  
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-  
-  if (data) {
-    headers["Content-Type"] = "application/json";
-  }
+  const token = getAccessToken() || "mock-access-token";
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${token}`,
+  };
 
-  // Add X-Filial header if a filial is selected (unless overridden)
+  if (data) headers["Content-Type"] = "application/json";
+
   if (!additionalHeaders["X-Filial"]) {
     const selectedFilial = localStorage.getItem("selected_filial");
-    if (selectedFilial) {
-      headers["X-Filial"] = selectedFilial;
-    }
+    if (selectedFilial) headers["X-Filial"] = selectedFilial;
   }
 
-  // Merge custom headers (they override defaults)
   Object.assign(headers, additionalHeaders);
 
-  const res = await fetch(url, {
+  const res = await fetch(`${API_BASE_URL}${url}`, {
     method,
     headers,
     body: data ? JSON.stringify(data) : undefined,
   });
 
-  // If 401 and we have a refresh token, try to refresh and retry once
+  if (res.status === 401 && !getRefreshToken()) {
+    console.warn("⚠️ Ignorando 401 (modo mock).");
+    return res;
+  }
+
   if (res.status === 401 && retryOnce && getRefreshToken()) {
     try {
       const newToken = await refreshAccessToken();
       headers["Authorization"] = `Bearer ${newToken}`;
-      
-      const retryRes = await fetch(url, {
+
+      const retryRes = await fetch(`${API_BASE_URL}${url}`, {
         method,
         headers,
         body: data ? JSON.stringify(data) : undefined,
       });
-      
+
       await throwIfResNotOk(retryRes);
       return retryRes;
     } catch (error) {
@@ -140,65 +152,52 @@ export async function apiRequest(
   return res;
 }
 
+// ===============================
+// QUERY FUNCTION (GET)
+// ===============================
 type UnauthorizedBehavior = "returnNull" | "throw";
+
 export const getQueryFn: <T>(options: {
   on401: UnauthorizedBehavior;
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
     try {
-      const token = getAccessToken();
-      const headers: Record<string, string> = {};
-      
-      if (token) {
-        headers["Authorization"] = `Bearer ${token}`;
-      }
+      const token = getAccessToken() || "mock-access-token";
+      const headers: Record<string, string> = {
+        Authorization: `Bearer ${token}`,
+      };
 
-      // Add X-Filial header if a filial is selected
       const selectedFilial = localStorage.getItem("selected_filial");
-      if (selectedFilial) {
-        headers["X-Filial"] = selectedFilial;
-      }
+      if (selectedFilial) headers["X-Filial"] = selectedFilial;
 
-      const res = await fetch(queryKey.join("/") as string, { headers });
+      const res = await fetch(`${API_BASE_URL}${queryKey[0]}`, { headers });
+
+      // ===============================
+      // 🔹 TRATAMENTO DE 404 ESPERADOS
+      // ===============================
+      if (res.status === 404) {
+        if (queryKey[0] === "/api/notifications/unread-count") {
+          return { count: 0 } as any;
+        }
+        return null as any;
+      }
 
       if (unauthorizedBehavior === "returnNull" && res.status === 401) {
         return null;
       }
 
-      // If 401 and we have a refresh token, try to refresh and retry once
-      if (res.status === 401 && getRefreshToken()) {
-        try {
-          const newToken = await refreshAccessToken();
-          headers["Authorization"] = `Bearer ${newToken}`;
-          
-          const retryRes = await fetch(queryKey.join("/") as string, { headers });
-          
-          if (unauthorizedBehavior === "returnNull" && retryRes.status === 401) {
-            return null;
-          }
-          
-          await throwIfResNotOk(retryRes);
-          return await retryRes.json();
-        } catch (error) {
-          if (unauthorizedBehavior === "returnNull") {
-            clearTokens();
-            return null;
-          }
-          throw error;
-        }
-      }
-
       await throwIfResNotOk(res);
       return await res.json();
     } catch (error) {
-      if (unauthorizedBehavior === "returnNull") {
-        return null;
-      }
+      if (unauthorizedBehavior === "returnNull") return null;
       throw error;
     }
   };
 
+// ===============================
+// QUERY CLIENT
+// ===============================
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {

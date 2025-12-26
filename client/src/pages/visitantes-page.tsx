@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+import { useLocation } from "wouter";
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,13 +9,13 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { UserCheck, Plus, Check, X, Loader2 } from "lucide-react";
+import { UserCheck, Plus, Check, Loader2 } from "lucide-react";
 import { StatusBadge } from "@/components/status-badge";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import type { Visitante } from "@shared/schema";
+import type { Visitante } from "@/shared/schema";
 import {
   Dialog,
   DialogContent,
@@ -24,9 +26,12 @@ import {
 } from "@/components/ui/dialog";
 
 export default function VisitantesPage() {
+  const [, navigate] = useLocation();
   const { toast } = useToast();
   const filialId = localStorage.getItem("selected_filial");
-  const [activeTab, setActiveTab] = useState("aguardando");
+  const role = localStorage.getItem("role"); // <-- 🔥 ajuste 1
+
+  const [activeTab, setActiveTab] = useState("aprovados");
   const [showNewDialog, setShowNewDialog] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -37,10 +42,30 @@ export default function VisitantesPage() {
     motivoVisita: "",
   });
 
-  const { data: visitantes, isLoading } = useQuery<Visitante[]>({
-    queryKey: ["/api/visitantes", filialId],
-    enabled: !!filialId,
-  });
+  // 🔥 Ajuste 2 - Query com rota correta
+const { data: visitantes, isLoading } = useQuery<Visitante[]>({
+  queryKey: ["visitantes", filialId],
+  queryFn: async () => {
+    const res = await apiRequest("GET", `/api/visitantes/filial/${filialId}`);
+    return res.json();
+  },
+  enabled: !!filialId,
+  refetchInterval: 2000, // 🔥 gestor atualiza toda hora
+});
+
+// Auto-redirecionar gestor para aba "aguardando" se houver visitantes esperando
+useEffect(() => {
+  if (role === "gestor" && visitantes) {
+    const aguardando = visitantes.filter(v => v.status === "aguardando");
+    if (aguardando.length > 0) {
+      setActiveTab("aguardando");
+    } 
+  }
+}, [visitantes, role]);
+
+  // 🔥 Ajuste 3 - invalidate correto
+  const refresh = () =>
+    queryClient.invalidateQueries({ queryKey: ["visitantes", filialId] });
 
   const createVisitanteMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
@@ -51,11 +76,8 @@ export default function VisitantesPage() {
       return await res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/visitantes"] });
-      toast({
-        title: "Visitante cadastrado",
-        description: "Aguardando aprovação",
-      });
+      refresh();
+      toast({ title: "Visitante cadastrado", description: "Aguardando aprovação" });
       setFormData({
         nome: "",
         cpf: "",
@@ -65,13 +87,6 @@ export default function VisitantesPage() {
       });
       setShowNewDialog(false);
     },
-    onError: (error: Error) => {
-      toast({
-        title: "Erro ao cadastrar",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
   });
 
   const aprovarVisitanteMutation = useMutation({
@@ -80,11 +95,8 @@ export default function VisitantesPage() {
       return await res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/visitantes"] });
-      toast({
-        title: "Visitante aprovado",
-        description: "Entrada liberada",
-      });
+      refresh();
+      toast({ title: "Visitante aprovado" });
     },
   });
 
@@ -94,11 +106,8 @@ export default function VisitantesPage() {
       return await res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/visitantes"] });
-      toast({
-        title: "Entrada registrada",
-        description: "Visitante está dentro da filial",
-      });
+      refresh();
+      toast({ title: "Entrada registrada" });
     },
   });
 
@@ -108,11 +117,8 @@ export default function VisitantesPage() {
       return await res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/visitantes"] });
-      toast({
-        title: "Saída registrada",
-        description: "Visitante deixou a filial",
-      });
+      refresh();
+      toast({ title: "Saída registrada" });
     },
   });
 
@@ -123,46 +129,57 @@ export default function VisitantesPage() {
 
   const visitantesAguardando = visitantes?.filter((v) => v.status === "aguardando");
   const visitantesAprovados = visitantes?.filter((v) => v.status === "aprovado");
-  const visitantesDentro = visitantes?.filter((v) => v.status === "dentro");
-  const visitantesSairam = visitantes?.filter((v) => v.status === "saiu");
+  const visitantesDentro = visitantes?.filter((v) => v.status === "dentro" || v.status === "entrada");
 
   return (
     <div className="p-6 space-y-6">
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Gestão de Visitantes</h1>
-          <p className="text-muted-foreground">Controle de visitantes e prestadores de serviço</p>
+          <h1 className="text-3xl font-bold">Gestão de Visitantes</h1>
+          <p className="text-muted-foreground">Controle de visitantes</p>
         </div>
-        <Button onClick={() => setShowNewDialog(true)} data-testid="button-novo-visitante">
+        <Button onClick={() => setShowNewDialog(true)}>
           <Plus className="mr-2 h-4 w-4" />
           Novo Visitante
         </Button>
       </div>
 
-      {/* Stats */}
+      {/* Stats - 🔥 ajuste 7 */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Aguardando</CardDescription>
-            <CardTitle className="text-3xl text-amber-600">{visitantesAguardando?.length || 0}</CardTitle>
-          </CardHeader>
-        </Card>
+        {role === "gestor" && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardDescription>Aguardando</CardDescription>
+              <CardTitle className="text-3xl text-amber-600">
+                {visitantesAguardando?.length || 0}
+              </CardTitle>
+            </CardHeader>
+          </Card>
+        )}
+
         <Card>
           <CardHeader className="pb-2">
             <CardDescription>Aprovados</CardDescription>
-            <CardTitle className="text-3xl text-blue-600">{visitantesAprovados?.length || 0}</CardTitle>
+            <CardTitle className="text-3xl text-blue-600">
+              {visitantesAprovados?.length || 0}
+            </CardTitle>
           </CardHeader>
         </Card>
+
         <Card>
           <CardHeader className="pb-2">
             <CardDescription>Dentro</CardDescription>
-            <CardTitle className="text-3xl text-emerald-600">{visitantesDentro?.length || 0}</CardTitle>
+            <CardTitle className="text-3xl text-emerald-600">
+              {visitantesDentro?.length || 0}
+            </CardTitle>
           </CardHeader>
         </Card>
+
         <Card>
           <CardHeader className="pb-2">
-            <CardDescription>Hoje</CardDescription>
+            <CardDescription>Total</CardDescription>
             <CardTitle className="text-3xl">{visitantes?.length || 0}</CardTitle>
           </CardHeader>
         </Card>
@@ -171,224 +188,109 @@ export default function VisitantesPage() {
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
-          <TabsTrigger value="aguardando" data-testid="tab-aguardando">
-            Aguardando ({visitantesAguardando?.length || 0})
-          </TabsTrigger>
-          <TabsTrigger value="aprovados" data-testid="tab-aprovados">
-            Aprovados ({visitantesAprovados?.length || 0})
-          </TabsTrigger>
-          <TabsTrigger value="dentro" data-testid="tab-dentro">
-            Dentro ({visitantesDentro?.length || 0})
-          </TabsTrigger>
-          <TabsTrigger value="historico" data-testid="tab-historico">
-            Histórico
-          </TabsTrigger>
+          {role === "gestor" && (
+            <TabsTrigger value="aguardando">Aguardando</TabsTrigger>
+          )}
+
+          <TabsTrigger value="aprovados">Aprovados</TabsTrigger>
+          <TabsTrigger value="dentro">Dentro</TabsTrigger>
+          <TabsTrigger value="historico">Histórico</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="aguardando" className="mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Visitantes Aguardando Aprovação</CardTitle>
-              <CardDescription>Aprove ou rejeite solicitações de visita</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <div className="flex justify-center py-8">
-                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                </div>
-              ) : visitantesAguardando && visitantesAguardando.length > 0 ? (
-                <div className="space-y-2">
-                  {visitantesAguardando.map((visitante) => (
-                    <div
-                      key={visitante.id}
-                      className="flex items-center justify-between p-4 border rounded-lg hover-elevate"
-                      data-testid={`visitante-${visitante.cpf}`}
-                    >
-                      <div className="flex-1 space-y-1">
-                        <div className="flex items-center gap-2">
-                          <UserCheck className="h-4 w-4 text-muted-foreground" />
-                          <span className="font-medium">{visitante.nome}</span>
-                          <StatusBadge status={visitante.status} type="visitante" />
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          CPF: {visitante.cpf}
-                        </div>
-                        {visitante.empresa && (
-                          <div className="text-sm text-muted-foreground">
-                            Empresa: {visitante.empresa}
-                          </div>
-                        )}
-                        {visitante.motivoVisita && (
-                          <div className="text-sm text-muted-foreground">
-                            Motivo: {visitante.motivoVisita}
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          onClick={() => aprovarVisitanteMutation.mutate(visitante.id)}
-                          disabled={aprovarVisitanteMutation.isPending}
-                          data-testid={`button-aprovar-${visitante.cpf}`}
-                        >
-                          <Check className="mr-2 h-4 w-4" />
-                          Aprovar
-                        </Button>
-                      </div>
+        {/* 🔥 Aba AGUARDANDO — só gestor */}
+        {role === "gestor" && (
+          <TabsContent value="aguardando" className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Visitantes aguardando</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {visitantesAguardando?.map((v) => (
+                  <div key={v.id} className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="flex-1 space-y-1">
+                      <span className="font-medium">{v.nome}</span>
+                      <StatusBadge status={v.status} type="visitante" />
+                      <p className="text-sm text-muted-foreground">CPF: {v.cpf}</p>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <UserCheck className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-                  <p className="text-muted-foreground">Nenhum visitante aguardando aprovação</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
 
+                    {/* 🔥 Botão só gestor */}
+                    {role === "gestor" && (
+                      <Button size="sm" onClick={() => aprovarVisitanteMutation.mutate(v.id)}>
+                        <Check className="mr-2 h-4 w-4" />
+                        Aprovar
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
+
+        {/* APROVADOS */}
         <TabsContent value="aprovados" className="mt-6">
           <Card>
             <CardHeader>
-              <CardTitle>Visitantes Aprovados</CardTitle>
-              <CardDescription>Registre a entrada de visitantes aprovados</CardDescription>
+              <CardTitle>Aprovados</CardTitle>
             </CardHeader>
             <CardContent>
-              {visitantesAprovados && visitantesAprovados.length > 0 ? (
-                <div className="space-y-2">
-                  {visitantesAprovados.map((visitante) => (
-                    <div
-                      key={visitante.id}
-                      className="flex items-center justify-between p-4 border rounded-lg hover-elevate"
-                    >
-                      <div className="flex-1 space-y-1">
-                        <div className="flex items-center gap-2">
-                          <UserCheck className="h-4 w-4 text-muted-foreground" />
-                          <span className="font-medium">{visitante.nome}</span>
-                          <StatusBadge status={visitante.status} type="visitante" />
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          CPF: {visitante.cpf}
-                        </div>
-                        {visitante.empresa && (
-                          <div className="text-sm text-muted-foreground">
-                            Empresa: {visitante.empresa}
-                          </div>
-                        )}
-                      </div>
-                      <Button
-                        size="sm"
-                        onClick={() => registrarEntradaMutation.mutate(visitante.id)}
-                        disabled={registrarEntradaMutation.isPending}
-                        data-testid={`button-entrada-${visitante.cpf}`}
-                      >
-                        Registrar Entrada
-                      </Button>
-                    </div>
-                  ))}
+              {visitantesAprovados?.map((v) => (
+                <div key={v.id} className="flex items-center justify-between p-4 border rounded-lg">
+                  <div>
+                    <p className="font-medium">{v.nome}</p>
+                    <StatusBadge status={v.status} type="visitante" />
+                  </div>
+
+                  {/* 🔥 Entrada só para porteiro */}
+                  {role === "porteiro" && (
+                    <Button onClick={() => registrarEntradaMutation.mutate(v.id)}>
+                      Registrar Entrada
+                    </Button>
+                  )}
                 </div>
-              ) : (
-                <div className="text-center py-8">
-                  <UserCheck className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-                  <p className="text-muted-foreground">Nenhum visitante aprovado</p>
-                </div>
-              )}
+              ))}
             </CardContent>
           </Card>
         </TabsContent>
 
+        {/* DENTRO */}
         <TabsContent value="dentro" className="mt-6">
           <Card>
             <CardHeader>
-              <CardTitle>Visitantes Dentro da Filial</CardTitle>
-              <CardDescription>Registre a saída de visitantes</CardDescription>
+              <CardTitle>Dentro da filial</CardTitle>
             </CardHeader>
             <CardContent>
-              {visitantesDentro && visitantesDentro.length > 0 ? (
-                <div className="space-y-2">
-                  {visitantesDentro.map((visitante) => (
-                    <div
-                      key={visitante.id}
-                      className="flex items-center justify-between p-4 border rounded-lg hover-elevate"
-                    >
-                      <div className="flex-1 space-y-1">
-                        <div className="flex items-center gap-2">
-                          <UserCheck className="h-4 w-4 text-muted-foreground" />
-                          <span className="font-medium">{visitante.nome}</span>
-                          <StatusBadge status={visitante.status} type="visitante" />
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          Entrada: {visitante.dataEntrada && format(new Date(visitante.dataEntrada), "dd/MM/yyyy HH:mm", { locale: ptBR })}
-                        </div>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => registrarSaidaMutation.mutate(visitante.id)}
-                        disabled={registrarSaidaMutation.isPending}
-                        data-testid={`button-saida-${visitante.cpf}`}
-                      >
-                        Registrar Saída
-                      </Button>
-                    </div>
-                  ))}
+              {visitantesDentro?.map((v) => (
+                <div key={v.id} className="flex items-center justify-between p-4 border rounded-lg">
+                  <div>
+                    <p className="font-medium">{v.nome}</p>
+                  </div>
+
+                  {/* 🔥 Saída só porteiro */}
+                  {role === "porteiro" && (
+                    <Button variant="outline" onClick={() => registrarSaidaMutation.mutate(v.id)}>
+                      Registrar Saída
+                    </Button>
+                  )}
                 </div>
-              ) : (
-                <div className="text-center py-8">
-                  <UserCheck className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-                  <p className="text-muted-foreground">Nenhum visitante dentro da filial</p>
-                </div>
-              )}
+              ))}
             </CardContent>
           </Card>
         </TabsContent>
 
+        {/* HISTÓRICO */}
         <TabsContent value="historico" className="mt-6">
           <Card>
             <CardHeader>
-              <CardTitle>Histórico de Visitantes</CardTitle>
-              <CardDescription>Todos os visitantes registrados</CardDescription>
+              <CardTitle>Histórico</CardTitle>
             </CardHeader>
             <CardContent>
-              {visitantes && visitantes.length > 0 ? (
-                <div className="space-y-2">
-                  {visitantes.map((visitante) => (
-                    <div key={visitante.id} className="p-4 border rounded-lg">
-                      <div className="flex items-start justify-between">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <UserCheck className="h-4 w-4 text-muted-foreground" />
-                            <span className="font-medium">{visitante.nome}</span>
-                            <StatusBadge status={visitante.status} type="visitante" />
-                          </div>
-                          <div className="text-sm text-muted-foreground">
-                            CPF: {visitante.cpf}
-                          </div>
-                          {visitante.empresa && (
-                            <div className="text-sm text-muted-foreground">
-                              Empresa: {visitante.empresa}
-                            </div>
-                          )}
-                        </div>
-                        <div className="text-right text-sm text-muted-foreground">
-                          {visitante.dataEntrada && (
-                            <div>Entrada: {format(new Date(visitante.dataEntrada), "dd/MM HH:mm", { locale: ptBR })}</div>
-                          )}
-                          {visitante.dataSaida && (
-                            <div>Saída: {format(new Date(visitante.dataSaida), "dd/MM HH:mm", { locale: ptBR })}</div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+              {visitantes?.map((v) => (
+                <div key={v.id} className="p-4 border rounded-lg">
+                  <p className="font-medium">{v.nome}</p>
+                  <StatusBadge status={v.status} type="visitante" />
                 </div>
-              ) : (
-                <div className="text-center py-8">
-                  <UserCheck className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-                  <p className="text-muted-foreground">Nenhum visitante registrado</p>
-                </div>
-              )}
+              ))}
             </CardContent>
           </Card>
         </TabsContent>
@@ -398,91 +300,43 @@ export default function VisitantesPage() {
       <Dialog open={showNewDialog} onOpenChange={setShowNewDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Cadastrar Novo Visitante</DialogTitle>
-            <DialogDescription>
-              Preencha os dados do visitante para solicitar aprovação
-            </DialogDescription>
+            <DialogTitle>Novo Visitante</DialogTitle>
           </DialogHeader>
+
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="nome">Nome Completo *</Label>
-              <Input
-                id="nome"
-                data-testid="input-nome-visitante"
-                placeholder="João Silva"
-                value={formData.nome}
-                onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="cpf">CPF *</Label>
-              <Input
-                id="cpf"
-                data-testid="input-cpf-visitante"
-                placeholder="000.000.000-00"
-                value={formData.cpf}
-                onChange={(e) => setFormData({ ...formData, cpf: e.target.value })}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="empresa">Empresa</Label>
-              <Input
-                id="empresa"
-                data-testid="input-empresa-visitante"
-                placeholder="Nome da empresa"
-                value={formData.empresa}
-                onChange={(e) => setFormData({ ...formData, empresa: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="tipoVisita">Tipo de Visita *</Label>
-              <Select
-                value={formData.tipoVisita}
-                onValueChange={(value) => setFormData({ ...formData, tipoVisita: value })}
-              >
-                <SelectTrigger id="tipoVisita" data-testid="select-tipo-visita">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="visitante">Visitante</SelectItem>
-                  <SelectItem value="prestador_servico">Prestador de Serviço</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="motivoVisita">Motivo da Visita</Label>
-              <Textarea
-                id="motivoVisita"
-                data-testid="textarea-motivo-visita"
-                placeholder="Descreva o motivo da visita..."
-                value={formData.motivoVisita}
-                onChange={(e) => setFormData({ ...formData, motivoVisita: e.target.value })}
-                rows={3}
-              />
-            </div>
+            <Input
+              placeholder="Nome completo"
+              value={formData.nome}
+              onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
+              required
+            />
+
+            <Input
+              placeholder="CPF"
+              value={formData.cpf}
+              onChange={(e) => setFormData({ ...formData, cpf: e.target.value })}
+              required
+            />
+
+            <Input
+              placeholder="Empresa"
+              value={formData.empresa}
+              onChange={(e) => setFormData({ ...formData, empresa: e.target.value })}
+            />
+
+            <Textarea
+              placeholder="Motivo da visita"
+              value={formData.motivoVisita}
+              onChange={(e) => setFormData({ ...formData, motivoVisita: e.target.value })}
+            />
+
             <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setShowNewDialog(false)}
-              >
+              <Button type="button" variant="outline" onClick={() => setShowNewDialog(false)}>
                 Cancelar
               </Button>
-              <Button
-                type="submit"
-                disabled={createVisitanteMutation.isPending}
-                data-testid="button-cadastrar-visitante"
-              >
-                {createVisitanteMutation.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Cadastrando...
-                  </>
-                ) : (
-                  "Cadastrar"
-                )}
+
+              <Button type="submit">
+                {createVisitanteMutation.isPending ? "Salvando..." : "Cadastrar"}
               </Button>
             </DialogFooter>
           </form>

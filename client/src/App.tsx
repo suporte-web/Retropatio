@@ -1,55 +1,62 @@
+import { useAuth } from "@/contexts/AuthContext";
+import { ProtectedRoute } from "@/routes/ProtectedRoute";
+
 import { Switch, Route, Redirect } from "wouter";
-import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { Toaster } from "@/components/ui/toaster";
+import { queryClient } from "./lib/queryClient";
+
+import { AuthProvider } from "@/contexts/AuthContext";
+import { FilialProvider } from "@/contexts/FilialContext";
+
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import {
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
-import { AuthProvider, useAuth } from "@/hooks/use-auth";
-import { useWebSocket } from "@/hooks/use-websocket";
+import { FilialSelector } from "@/components/filial-selector";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NotificationCenter } from "@/components/notification-center";
-import NotFound from "@/pages/not-found";
+import { Toaster } from "@/components/ui/toaster";
+
+import { Loader2 } from "lucide-react";
+
+// =====================
+// PÁGINAS
+// =====================
 import AuthPage from "@/pages/auth-page";
 import FilialSelectionPage from "@/pages/filial-selection-page";
+import Unauthorized from "@/pages/Unauthorized";
+import NotFound from "@/pages/not-found";
+
 import PortariaPage from "@/pages/portaria-page";
 import VagasPage from "@/pages/vagas-page";
 import VagasAdminPage from "@/pages/vagas-admin-page";
 import VisitantesPage from "@/pages/visitantes-page";
 import ChamadasPage from "@/pages/chamadas-page";
+
 import ClienteDashboardPage from "@/pages/cliente-dashboard-page";
 import ClienteChamadasPage from "@/pages/cliente-chamadas-page";
 import RelatoriosPage from "@/pages/relatorios-page";
+
 import GestaoPage from "@/pages/gestao-page";
 import UsuariosPage from "@/pages/usuarios-page";
 import FiliaisPage from "@/pages/filiais-page";
 import AuditoriaPage from "@/pages/auditoria-page";
+
 import MotoristasPage from "@/pages/motoristas-page";
 import VeiculosCadastroPage from "@/pages/veiculos-cadastro-page";
 import FornecedoresPage from "@/pages/fornecedores-page";
 import StatusCaminhaoPage from "@/pages/status-caminhao-page";
+
 import TVDisplayPage from "@/pages/tv-display-page";
-import { Loader2 } from "lucide-react";
+
+// =========================================================
+//  PROTECTED LAYOUT (APENAS UI)
+// =========================================================
 
 function ProtectedLayout({ children }: { children: React.ReactNode }) {
-  const { user, isLoading } = useAuth();
-  
-  // Initialize WebSocket connection for real-time updates
-  useWebSocket();
-  
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  if (!user) {
-    return <Redirect to="/auth" />;
-  }
-
   const style = {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3rem",
@@ -59,14 +66,17 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
     <SidebarProvider style={style as React.CSSProperties}>
       <div className="flex h-screen w-full">
         <AppSidebar />
+
         <div className="flex flex-col flex-1 overflow-hidden">
-          <header className="flex items-center justify-between gap-2 border-b border-border px-4 h-16 flex-shrink-0">
-            <SidebarTrigger data-testid="button-sidebar-toggle" />
-            <div className="flex items-center gap-2">
+          <header className="flex items-center justify-between gap-2 border-b px-4 h-16">
+            <SidebarTrigger />
+            <div className="flex items-center gap-4">
+              <FilialSelector />
               <NotificationCenter />
               <ThemeToggle />
             </div>
           </header>
+
           <main className="flex-1 overflow-auto">
             {children}
           </main>
@@ -76,175 +86,240 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
   );
 }
 
+// =========================================================
+//  APP GATE (CONTROLA AUTH LOADING)
+// =========================================================
+
+function AppGate() {
+  const { loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <TooltipProvider>
+      <div className="min-h-screen bg-background">
+        <Router />
+      </div>
+      <Toaster />
+    </TooltipProvider>
+  );
+}
+
+// =========================================================
+//  ROTAS
+// =========================================================
+
 function Router() {
   return (
     <Switch>
+      {/* Públicas */}
       <Route path="/auth" component={AuthPage} />
-      
-      <Route path="/filial">
-        {() => (
-          <ProtectedLayout>
-            <FilialSelectionPage />
-          </ProtectedLayout>
-        )}
-      </Route>
-      
+      <Route path="/filial-selection" component={FilialSelectionPage} />
+      <Route path="/unauthorized" component={Unauthorized} />
+
+      {/* Portaria */}
       <Route path="/portaria">
         {() => (
-          <ProtectedLayout>
-            <PortariaPage />
-          </ProtectedLayout>
+          <ProtectedRoute roles={["PORTEIRO", "GESTOR", "ADMIN"]}>
+            <ProtectedLayout>
+              <PortariaPage />
+            </ProtectedLayout>
+          </ProtectedRoute>
         )}
       </Route>
-      
+
       <Route path="/vagas">
         {() => (
-          <ProtectedLayout>
-            <VagasPage />
-          </ProtectedLayout>
+          <ProtectedRoute roles={["PORTEIRO", "GESTOR", "ADMIN", "CLIENTE"]}>
+            <ProtectedLayout>
+              <VagasPage />
+            </ProtectedLayout>
+          </ProtectedRoute>
         )}
       </Route>
-      
+
       <Route path="/visitantes">
         {() => (
-          <ProtectedLayout>
-            <VisitantesPage />
-          </ProtectedLayout>
+          <ProtectedRoute roles={["PORTEIRO", "GESTOR", "ADMIN"]}>
+            <ProtectedLayout>
+              <VisitantesPage />
+            </ProtectedLayout>
+          </ProtectedRoute>
         )}
       </Route>
-      
+
       <Route path="/chamadas">
         {() => (
-          <ProtectedLayout>
-            <ChamadasPage />
-          </ProtectedLayout>
+          <ProtectedRoute roles={["PORTEIRO", "GESTOR", "ADMIN"]}>
+            <ProtectedLayout>
+              <ChamadasPage />
+            </ProtectedLayout>
+          </ProtectedRoute>
         )}
       </Route>
-      
-      <Route path="/cliente">
-        {() => (
-          <ProtectedLayout>
-            <ClienteDashboardPage />
-          </ProtectedLayout>
-        )}
-      </Route>
-      
-      <Route path="/cliente-chamadas">
-        {() => (
-          <ProtectedLayout>
-            <ClienteChamadasPage />
-          </ProtectedLayout>
-        )}
-      </Route>
-      
-      <Route path="/relatorios">
-        {() => (
-          <ProtectedLayout>
-            <RelatoriosPage />
-          </ProtectedLayout>
-        )}
-      </Route>
-      
-      <Route path="/gestao">
-        {() => (
-          <ProtectedLayout>
-            <GestaoPage />
-          </ProtectedLayout>
-        )}
-      </Route>
-      
-      <Route path="/usuarios">
-        {() => (
-          <ProtectedLayout>
-            <UsuariosPage />
-          </ProtectedLayout>
-        )}
-      </Route>
-      
-      <Route path="/filiais">
-        {() => (
-          <ProtectedLayout>
-            <FiliaisPage />
-          </ProtectedLayout>
-        )}
-      </Route>
-      
-      <Route path="/auditoria">
-        {() => (
-          <ProtectedLayout>
-            <AuditoriaPage />
-          </ProtectedLayout>
-        )}
-      </Route>
-      
-      <Route path="/vagas-admin">
-        {() => (
-          <ProtectedLayout>
-            <VagasAdminPage />
-          </ProtectedLayout>
-        )}
-      </Route>
-      
-      <Route path="/motoristas">
-        {() => (
-          <ProtectedLayout>
-            <MotoristasPage />
-          </ProtectedLayout>
-        )}
-      </Route>
-      
-      <Route path="/veiculos-cadastro">
-        {() => (
-          <ProtectedLayout>
-            <VeiculosCadastroPage />
-          </ProtectedLayout>
-        )}
-      </Route>
-      
+
       <Route path="/fornecedores">
         {() => (
-          <ProtectedLayout>
-            <FornecedoresPage />
-          </ProtectedLayout>
+          <ProtectedRoute roles={["PORTEIRO", "GESTOR", "ADMIN"]}>
+            <ProtectedLayout>
+              <FornecedoresPage />
+            </ProtectedLayout>
+          </ProtectedRoute>
         )}
       </Route>
-      
+
+      <Route path="/motoristas">
+        {() => (
+          <ProtectedRoute roles={["PORTEIRO", "GESTOR", "ADMIN"]}>
+            <ProtectedLayout>
+              <MotoristasPage />
+            </ProtectedLayout>
+          </ProtectedRoute>
+        )}
+      </Route>
+
+      <Route path="/veiculos-cadastro">
+        {() => (
+          <ProtectedRoute roles={["PORTEIRO", "GESTOR", "ADMIN"]}>
+            <ProtectedLayout>
+              <VeiculosCadastroPage />
+            </ProtectedLayout>
+          </ProtectedRoute>
+        )}
+      </Route>
+
       <Route path="/status-caminhao">
         {() => (
-          <ProtectedLayout>
-            <StatusCaminhaoPage />
-          </ProtectedLayout>
+          <ProtectedRoute roles={["PORTEIRO", "GESTOR", "ADMIN"]}>
+            <ProtectedLayout>
+              <StatusCaminhaoPage />
+            </ProtectedLayout>
+          </ProtectedRoute>
         )}
       </Route>
-      
+
       <Route path="/tv-display">
-        {() => <TVDisplayPage />}
+        {() => (
+          <ProtectedRoute roles={["PORTEIRO", "GESTOR", "ADMIN"]}>
+            <TVDisplayPage />
+          </ProtectedRoute>
+        )}
       </Route>
-      
+
+      {/* Cliente */}
+      <Route path="/cliente">
+        {() => (
+          <ProtectedRoute roles={["CLIENTE", "GESTOR", "ADMIN"]}>
+            <ProtectedLayout>
+              <ClienteDashboardPage />
+            </ProtectedLayout>
+          </ProtectedRoute>
+        )}
+      </Route>
+
+      <Route path="/cliente-chamadas">
+        {() => (
+          <ProtectedRoute roles={["CLIENTE", "GESTOR", "ADMIN"]}>
+            <ProtectedLayout>
+              <ClienteChamadasPage />
+            </ProtectedLayout>
+          </ProtectedRoute>
+        )}
+      </Route>
+
+      <Route path="/relatorios">
+        {() => (
+          <ProtectedRoute roles={["CLIENTE", "GESTOR", "ADMIN"]}>
+            <ProtectedLayout>
+              <RelatoriosPage />
+            </ProtectedLayout>
+          </ProtectedRoute>
+        )}
+      </Route>
+
+      {/* Gestão */}
+      <Route path="/gestao">
+        {() => (
+          <ProtectedRoute roles={["GESTOR", "ADMIN"]}>
+            <ProtectedLayout>
+              <GestaoPage />
+            </ProtectedLayout>
+          </ProtectedRoute>
+        )}
+      </Route>
+
+      <Route path="/usuarios">
+        {() => (
+          <ProtectedRoute roles={["GESTOR", "ADMIN"]}>
+            <ProtectedLayout>
+              <UsuariosPage />
+            </ProtectedLayout>
+          </ProtectedRoute>
+        )}
+      </Route>
+
+      <Route path="/filiais">
+        {() => (
+          <ProtectedRoute roles={["GESTOR", "ADMIN"]}>
+            <ProtectedLayout>
+              <FiliaisPage />
+            </ProtectedLayout>
+          </ProtectedRoute>
+        )}
+      </Route>
+
+      <Route path="/vagas-admin">
+        {() => (
+          <ProtectedRoute roles={["GESTOR", "ADMIN"]}>
+            <ProtectedLayout>
+              <VagasAdminPage />
+            </ProtectedLayout>
+          </ProtectedRoute>
+        )}
+      </Route>
+
+      <Route path="/auditoria">
+        {() => (
+          <ProtectedRoute roles={["ADMIN"]}>
+            <ProtectedLayout>
+              <AuditoriaPage />
+            </ProtectedLayout>
+          </ProtectedRoute>
+        )}
+      </Route>
+
+      {/* Default */}
       <Route path="/">
-        {() => <Redirect to="/filial" />}
+        <Redirect to="/auth" />
       </Route>
-      
+
       <Route component={NotFound} />
     </Switch>
   );
 }
 
-function App() {
+// =========================================================
+//  APP ROOT
+// =========================================================
+
+export default function App() {
+  console.log("🟢 App montado corretamente");
+
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <AuthProvider>
-          <TooltipProvider>
-            <div className="min-h-screen bg-background">
-              <Router />
-            </div>
-            <Toaster />
-          </TooltipProvider>
+          <FilialProvider>
+            <AppGate />
+          </FilialProvider>
         </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );
 }
-
-export default App;

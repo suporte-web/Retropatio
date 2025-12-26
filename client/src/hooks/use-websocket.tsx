@@ -1,163 +1,148 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
+import { useFilial } from "@/contexts/FilialContext";
 
 type WebSocketMessage = {
   type: string;
   data: any;
 };
 
-export function useWebSocket() {
+export function useWebSocket(enabled: boolean) {
   const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimeoutRef = useRef<number | null>(null);
+
+  // 🔹 flag para evitar loop infinito
+  const shouldReconnectRef = useRef(false);
+
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
-  const reconnectAttemptsRef = useRef(0);
-  const maxReconnectAttempts = 5;
 
-  const connect = useCallback(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
+  // ⚠️ CONTEXTOS SÃO USADOS APENAS PARA DADOS
+  // ❌ NÃO controlam se conecta ou não
+  const { user } = useAuth();
+  const { filialId } = useFilial();
+
+  // ===============================
+  //  FUNÇÃO DE CONEXÃO
+  // ===============================
+  const connect = () => {
+    if (!enabled) return;
+
+    // já conectado ou conectando
+    if (
+      wsRef.current &&
+      (wsRef.current.readyState === WebSocket.OPEN ||
+        wsRef.current.readyState === WebSocket.CONNECTING)
+    ) {
       return;
     }
 
-    try {
-      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const filialId = localStorage.getItem("selected_filial");
-      
-      if (!filialId) {
-        console.log("Cannot connect WebSocket: no filial selected");
-        return;
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${protocol}//${window.location.host}/ws?filialId=${filialId}`;
+
+    console.log("🔌 WebSocket conectando:", wsUrl);
+
+    const ws = new WebSocket(wsUrl);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      console.log("✅ WebSocket conectado");
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const message: WebSocketMessage = JSON.parse(event.data);
+
+        switch (message.type) {
+          case "veiculo_entrada":
+          case "veiculo_saida":
+            queryClient.invalidateQueries({ queryKey: ["/api/veiculos"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/vagas"] });
+
+            if (message.type === "veiculo_entrada") {
+              toast({
+                title: "Nova Entrada",
+                description: `Veículo ${message.data?.placaCavalo ?? ""}`,
+              });
+            }
+            break;
+
+          case "vaga_updated":
+            queryClient.invalidateQueries({ queryKey: ["/api/vagas"] });
+            break;
+
+          case "visitante_novo":
+            queryClient.invalidateQueries({
+              queryKey: ["/api/visitantes", filialId],
+            });
+            toast({
+              title: "Novo Visitante",
+              description: message.data?.nome,
+            });
+            break;
+
+          case "chamada_nova":
+            queryClient.invalidateQueries({ queryKey: ["/api/chamadas"] });
+            toast({
+              title: "Nova Chamada",
+              description: message.data?.motivo,
+            });
+            break;
+
+          default:
+            console.log("ℹ️ Evento WS ignorado:", message.type);
+        }
+      } catch (err) {
+        console.error("Erro ao processar mensagem WS:", err);
       }
-      
-      const wsUrl = `${protocol}//${window.location.host}/ws?filialId=${encodeURIComponent(filialId)}`;
-      
-      console.log("Connecting to WebSocket:", wsUrl);
-      const ws = new WebSocket(wsUrl);
+    };
 
-      ws.onopen = () => {
-        console.log("WebSocket connected");
-        reconnectAttemptsRef.current = 0;
-      };
+    ws.onerror = () => {
+      console.warn("⚠️ WebSocket indisponível (ignorado)");
+    };
 
-      ws.onmessage = (event) => {
-        try {
-          const message: WebSocketMessage = JSON.parse(event.data);
-          console.log("WebSocket message received:", message.type, message.data);
+    ws.onclose = (event) => {
+      wsRef.current = null;
 
-          // Get current filialId for query invalidation
-          const currentFilialId = localStorage.getItem("selected_filial");
+      if (event.code === 1006) {
+        console.info("ℹ️ WS fechado (1006)");
+      } else {
+        console.log("🔌 WebSocket fechado", event.code, event.reason);
+      }
 
-          // Invalidate relevant queries based on event type
-          switch (message.type) {
-            case "veiculo_entrada":
-            case "veiculo_saida":
-              queryClient.invalidateQueries({ queryKey: ["/api/veiculos", currentFilialId] });
-              queryClient.invalidateQueries({ queryKey: ["/api/veiculos"] });
-              queryClient.invalidateQueries({ queryKey: ["/api/vagas", currentFilialId] });
-              queryClient.invalidateQueries({ queryKey: ["/api/vagas"] });
-              
-              if (message.type === "veiculo_entrada") {
-                toast({
-                  title: "Nova Entrada",
-                  description: `Veículo ${message.data.placaCavalo} registrado`,
-                });
-              }
-              break;
+      // 🔁 reconecta SOMENTE se permitido
+      if (shouldReconnectRef.current && enabled) {
+        reconnectTimeoutRef.current = window.setTimeout(() => {
+          connect();
+        }, 3000);
+      }
+    };
+  };
 
-            case "vaga_updated":
-              queryClient.invalidateQueries({ queryKey: ["/api/vagas", currentFilialId] });
-              queryClient.invalidateQueries({ queryKey: ["/api/vagas"] });
-              break;
-
-            case "visitante_novo":
-              queryClient.invalidateQueries({ queryKey: ["/api/visitantes", currentFilialId] });
-              queryClient.invalidateQueries({ queryKey: ["/api/visitantes"] });
-              toast({
-                title: "Novo Visitante",
-                description: `${message.data.nome} aguardando aprovação`,
-              });
-              break;
-
-            case "visitante_aprovado":
-              queryClient.invalidateQueries({ queryKey: ["/api/visitantes", currentFilialId] });
-              queryClient.invalidateQueries({ queryKey: ["/api/visitantes"] });
-              toast({
-                title: "Visitante Aprovado ✓",
-                description: `${message.data.nome} foi aprovado para entrada`,
-                duration: 5000,
-              });
-              break;
-
-            case "visitante_entrada":
-            case "visitante_saida":
-              queryClient.invalidateQueries({ queryKey: ["/api/visitantes", currentFilialId] });
-              queryClient.invalidateQueries({ queryKey: ["/api/visitantes"] });
-              break;
-
-            case "chamada_nova":
-              queryClient.invalidateQueries({ queryKey: ["/api/chamadas", currentFilialId] });
-              queryClient.invalidateQueries({ queryKey: ["/api/chamadas"] });
-              toast({
-                title: "Nova Chamada",
-                description: message.data.motivo,
-                variant: "default",
-              });
-              break;
-
-            case "chamada_atendida":
-              queryClient.invalidateQueries({ queryKey: ["/api/chamadas", currentFilialId] });
-              queryClient.invalidateQueries({ queryKey: ["/api/chamadas"] });
-              break;
-
-            default:
-              console.log("Unknown WebSocket message type:", message.type);
-          }
-        } catch (error) {
-          console.error("Error parsing WebSocket message:", error);
-        }
-      };
-
-      ws.onerror = (error) => {
-        console.error("WebSocket error:", error);
-      };
-
-      ws.onclose = () => {
-        console.log("WebSocket disconnected");
-        wsRef.current = null;
-
-        // Attempt to reconnect with exponential backoff
-        if (reconnectAttemptsRef.current < maxReconnectAttempts) {
-          const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000);
-          console.log(`Reconnecting in ${delay}ms (attempt ${reconnectAttemptsRef.current + 1}/${maxReconnectAttempts})`);
-          
-          reconnectTimeoutRef.current = setTimeout(() => {
-            reconnectAttemptsRef.current++;
-            connect();
-          }, delay);
-        }
-      };
-
-      wsRef.current = ws;
-    } catch (error) {
-      console.error("Failed to create WebSocket connection:", error);
-    }
-  }, [queryClient, toast]);
-
+  // ===============================
+  //  EFFECT PRINCIPAL (CONTROLADO)
+  // ===============================
+  
   useEffect(() => {
+    if (!enabled) return;
+
+    shouldReconnectRef.current = true;
     connect();
 
     return () => {
+      shouldReconnectRef.current = false;
+
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
       }
+
       if (wsRef.current) {
         wsRef.current.close();
         wsRef.current = null;
       }
     };
-  }, [connect]);
-
-  return {
-    isConnected: wsRef.current?.readyState === WebSocket.OPEN,
-  };
+  }, [enabled, filialId]);
 }

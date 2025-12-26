@@ -8,7 +8,9 @@ import { FileDown, FileText, Loader2, Search } from "lucide-react";
 import { StatusBadge } from "@/components/status-badge";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import type { Veiculo } from "@shared/schema";
+import type { Veiculo, Filial, Chamada, AuditLog } from "@/shared/schema";
+import { Badge } from "@/components/ui/badge";
+
 import {
   Select,
   SelectContent,
@@ -462,6 +464,7 @@ export default function RelatoriosPage() {
                           <span className="text-sm text-muted-foreground">+ {veiculo.placaCarreta}</span>
                         )}
                         <StatusBadge status={veiculo.situacao} type="veiculo" />
+                        <Badge variant="outline">{veiculo.situacao}</Badge>
                       </div>
                       <div className="text-sm text-muted-foreground">
                         Motorista: {veiculo.motorista}

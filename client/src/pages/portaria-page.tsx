@@ -7,39 +7,96 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Truck, LogOut, Plus, Loader2, Clock, UserCheck, ArrowLeft } from "lucide-react";
 import { StatusBadge } from "@/components/status-badge";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
 import { useLocation } from "wouter";
-import type { Veiculo, Vaga, Visitante } from "@shared/schema";
+import { Badge } from "@/components/ui/badge";
+
+/* =====================================================
+   TIPOS PARA A PORTARIA (AGORA BASEADO EM ENTRADA)
+===================================================== */
+type EntradaAtiva = {
+  id: number;
+  filialId: string;
+  vagaId: number;
+
+  placaCavalo: string;
+  placaCarreta?: string | null;
+  motorista: string;
+
+  tipo: string;
+  tipoVeiculoCategoria?: string | null;
+  tipoProprietario?: string | null;
+  statusCarga?: string | null;
+
+  transportadora?: string | null;
+  cliente?: string | null;
+  doca?: string | null;
+  valor?: number | null;
+  cte?: string | null;
+  nf?: string | null;
+  lacre?: string | null;
+  cpfMotorista?: string | null;
+  observacoes?: string | null;
+  multi?: boolean | null;
+
+  status?: string | null;
+  dataEntrada: string;
+  dataSaida?: string | null;
+
+  vaga?: any;
+  filial?: any;
+};
+
+type Vaga = {
+  id: number;
+  NomeVaga: string;
+  status: string;
+  tipoVaga?: {
+    Nome: string;
+  };
+};
+
+type Visitante = {
+  id: string;
+  nome: string;
+  status: string;
+};
 
 type OperationMode = "selection" | "veiculo";
 
 export default function PortariaPage() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+
   const filialId = localStorage.getItem("selected_filial");
+  const filialNome = localStorage.getItem("filialNome");
+  const filialCodigo = localStorage.getItem("filialCodigo");
+
+  useEffect(() => {
+    if (!filialId) {
+      setLocation("/filial-selection");
+    }
+  }, []);
+
   const [operationMode, setOperationMode] = useState<OperationMode>("selection");
   const [activeTab, setActiveTab] = useState("entrada");
-  
-  // Estado para Dialog de Saída
+
   const [saidaDialogOpen, setSaidaDialogOpen] = useState(false);
-  const [veiculoSaida, setVeiculoSaida] = useState<Veiculo | null>(null);
-  const [saidaData, setSaidaData] = useState({
-    cte: "",
-    nf: "",
-    lacre: "",
-  });
+  const [entradaSaida, setEntradaSaida] = useState<EntradaAtiva | null>(null);
+  const [saidaData, setSaidaData] = useState({ cte: "", nf: "", lacre: "" });
+  const [loadingVeiculos, setLoadingVeiculos] = useState(false);
 
   const [formData, setFormData] = useState({
-    tipoVeiculoCategoria: "cavalo_carreta" as "carro" | "moto" | "cavalo" | "cavalo_carreta",
-    tipoProprietario: "terceiro" as "terceiro" | "agregado" | "frota",
-    statusCarga: "" as "" | "carregado" | "descarregado" | "pernoite" | "manutencao",
-    tipoMotorista: "visitante" as "visitante" | "funcionario", // For carro/moto
+    tipoVeiculoCategoria: "cavalo_carreta",
+    tipoProprietario: "terceiro",
+    statusCarga: "",
+    tipoMotorista: "visitante",
+
     placaCavalo: "",
     placaCarreta: "",
     motorista: "",
@@ -48,6 +105,7 @@ export default function PortariaPage() {
     cliente: "",
     doca: "",
     vagaId: "",
+
     multi: false,
     valor: "",
     cte: "",
@@ -56,12 +114,13 @@ export default function PortariaPage() {
     observacoes: "",
   });
 
-  const isVeiculoLeve = formData.tipoVeiculoCategoria === "carro" || formData.tipoVeiculoCategoria === "moto";
+  const isVeiculoLeve =
+    formData.tipoVeiculoCategoria === "carro" ||
+    formData.tipoVeiculoCategoria === "moto";
 
-  // Clear heavy-vehicle fields when switching to light vehicle
   useEffect(() => {
     if (isVeiculoLeve) {
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
         placaCarreta: "",
         transportadora: "",
@@ -77,78 +136,117 @@ export default function PortariaPage() {
     }
   }, [isVeiculoLeve]);
 
-  const { data: veiculos, isLoading: loadingVeiculos } = useQuery<Veiculo[]>({
-    queryKey: ["/api/veiculos", filialId],
+  /* =========================
+     CONSULTA ENTRADAS (ATIVAS / HOJE)
+     - agora vem do /api/entrada
+  ========================= */
+  const { data: ativosRaw } = useQuery({
+    queryKey: ["entrada-ativos", filialId],
     enabled: !!filialId,
+    queryFn: () =>
+      apiRequest("GET", `/api/entrada/ativos?filialId=${filialId}`).then((res) => res.json()),
   });
 
-  const { data: vagas } = useQuery<Vaga[]>({
-    queryKey: ["/api/vagas", filialId],
-    enabled: !!filialId,
+  const entradasAtivas: EntradaAtiva[] = Array.isArray(ativosRaw)
+    ? ativosRaw
+    : ativosRaw?.data ?? [];
+
+  const { data: historicoHojeRaw } = useQuery({
+    queryKey: ["entrada-historico-hoje"],
+    enabled: true,
+    queryFn: () =>
+      apiRequest("GET", `/api/entrada/historico`).then((res) => res.json()),
   });
 
-  const { data: visitantes } = useQuery<Visitante[]>({
-    queryKey: ["/api/visitantes", filialId],
+  const entradasHoje: EntradaAtiva[] = Array.isArray(historicoHojeRaw)
+    ? historicoHojeRaw
+    : historicoHojeRaw?.data ?? [];
+
+  /* =========================
+     VAGAS (mantém seu endpoint atual)
+     - você usa status livre/ocupada para KPI
+  ========================= */
+  const { data: vagasRaw } = useQuery({
+    queryKey: ["vagas", filialId],
     enabled: !!filialId,
+    queryFn: () =>
+      apiRequest("GET", `/api/vagas/filial/${filialId}`).then((res) => res.json()),
   });
 
-  const createVeiculoMutation = useMutation({
+  const vagas: Vaga[] = Array.isArray(vagasRaw)
+    ? vagasRaw
+    : vagasRaw?.data ?? [];
+
+  /* =========================
+     VISITANTES (mantém)
+  ========================= */
+  const { data: visitantesRaw } = useQuery({
+    queryKey: ["visitantes", filialId],
+    enabled: !!filialId,
+    queryFn: () =>
+      apiRequest("GET", `/api/visitantes?filialId=${filialId}`).then((res) => res.json()),
+  });
+
+  const visitantes: Visitante[] = Array.isArray(visitantesRaw)
+    ? visitantesRaw
+    : visitantesRaw?.data ?? [];
+
+  /* =========================
+     MUTATION: REGISTRAR ENTRADA
+     - agora POST /api/entrada
+     - envia TODOS os campos do seu form
+  ========================= */
+  const createEntradaMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
+      if (!filialId) throw new Error("Filial não selecionada");
+
+      // ✅ payload com todos os campos do seu model Entrada
       const payload: any = {
-        ...data,
         filialId,
-        situacao: "aguardando",
+        vagaId: data.vagaId, // backend converte Number
+        placaCavalo: data.placaCavalo,
+        placaCarreta: data.placaCarreta || null,
+        motorista: data.motorista,
+
+        // ✅ ESTE É O CAMPO OBRIGATÓRIO QUE FALTAVA ANTES
+        // você pode manter como categoria:
+        tipo: data.tipoVeiculoCategoria,
+
+        tipoVeiculoCategoria: data.tipoVeiculoCategoria,
+        tipoProprietario: isVeiculoLeve ? "terceiro" : data.tipoProprietario,
+        statusCarga: isVeiculoLeve ? null : (data.statusCarga || null),
+
+        transportadora: isVeiculoLeve ? null : (data.transportadora || null),
+        cliente: isVeiculoLeve ? null : (data.cliente || null),
+        doca: isVeiculoLeve ? null : (data.doca || null),
+
+        valor: isVeiculoLeve ? null : (data.valor ? Number(data.valor) : null),
+        cte: isVeiculoLeve ? null : (data.cte || null),
+        nf: isVeiculoLeve ? null : (data.nf || null),
+        lacre: isVeiculoLeve ? null : (data.lacre || null),
+
+        cpfMotorista: data.cpfMotorista || null,
+        observacoes: data.observacoes || null,
+        multi: data.multi ?? false,
       };
-      
-      // For carro/moto, set tipoProprietario based on tipoMotorista
-      const isLeve = data.tipoVeiculoCategoria === "carro" || data.tipoVeiculoCategoria === "moto";
-      if (isLeve) {
-        // For light vehicles, clear ALL heavy-vehicle fields to prevent leakage
-        delete payload.placaCarreta;
-        delete payload.transportadora;
-        delete payload.cliente;
-        delete payload.doca;
-        delete payload.multi;
-        delete payload.statusCarga;
-        delete payload.valor;
-        delete payload.cte;
-        delete payload.nf;
-        delete payload.lacre;
-        // Use tipoMotorista to determine observacoes context
-        payload.observacoes = `Tipo: ${data.tipoMotorista === "visitante" ? "Visitante" : "Funcionário"}${data.observacoes ? ` - ${data.observacoes}` : ""}`;
-        // Set a default tipoProprietario for light vehicles
-        payload.tipoProprietario = "terceiro";
-      } else {
-        // Convert valor to string (numeric) if present
-        if (data.valor && data.valor !== "") {
-          payload.valor = parseFloat(data.valor).toFixed(2);
-        } else {
-          delete payload.valor;
-        }
-        // Remove statusCarga if empty
-        if (!data.statusCarga) {
-          delete payload.statusCarga;
-        }
+
+      // opcional: se você quiser registrar “tipoMotorista” em observações para leve
+      if (isVeiculoLeve) {
+        payload.observacoes = `Tipo: ${
+          data.tipoMotorista === "visitante" ? "Visitante" : "Funcionário"
+        }${data.observacoes ? ` - ${data.observacoes}` : ""}`;
       }
-      
-      // Remove vagaId if empty
-      if (!data.vagaId || data.vagaId === "") {
-        delete payload.vagaId;
-      }
-      
-      // Clean up tipoMotorista as it's not in the schema
-      delete payload.tipoMotorista;
-      
-      const res = await apiRequest("POST", "/api/veiculos", payload);
-      return await res.json();
+
+      const res = await apiRequest("POST", "/api/entrada", payload);
+      return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/veiculos", filialId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/vagas", filialId] });
-      toast({
-        title: "Veículo registrado",
-        description: "Entrada registrada com sucesso",
-      });
+      queryClient.invalidateQueries({ queryKey: ["entrada-ativos", filialId] });
+      queryClient.invalidateQueries({ queryKey: ["entrada-historico-hoje"] });
+      queryClient.invalidateQueries({ queryKey: ["vagas", filialId] });
+
+      toast({ title: "Entrada registrada", description: "Entrada registrada com sucesso" });
+
       setFormData({
         tipoVeiculoCategoria: "cavalo_carreta",
         tipoProprietario: "terceiro",
@@ -170,131 +268,119 @@ export default function PortariaPage() {
         observacoes: "",
       });
     },
-    onError: (error: Error) => {
-      toast({
-        title: "Erro ao registrar",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
   });
 
+  /* =========================
+     MUTATION: REGISTRAR SAÍDA
+     - agora PATCH /api/entrada/:id/saida
+  ========================= */
   const registrarSaidaMutation = useMutation({
-    mutationFn: async ({ veiculoId, data }: { veiculoId: string; data: typeof saidaData }) => {
-      const res = await apiRequest("PATCH", `/api/veiculos/${veiculoId}/saida`, data);
-      return await res.json();
+    mutationFn: async ({ entradaId, data }: { entradaId: number; data: typeof saidaData }) => {
+      const res = await apiRequest("PATCH", `/api/entrada/${entradaId}/saida`, data);
+      return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/veiculos", filialId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/vagas", filialId] });
-      toast({
-        title: "Saída registrada",
-        description: "Veículo liberado com sucesso",
-      });
+      queryClient.invalidateQueries({ queryKey: ["entrada-ativos", filialId] });
+      queryClient.invalidateQueries({ queryKey: ["entrada-historico-hoje"] });
+      queryClient.invalidateQueries({ queryKey: ["vagas", filialId] });
+
+      toast({ title: "Saída registrada", description: "Veículo liberado com sucesso" });
+
       setSaidaDialogOpen(false);
-      setVeiculoSaida(null);
+      setEntradaSaida(null);
       setSaidaData({ cte: "", nf: "", lacre: "" });
     },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    createVeiculoMutation.mutate(formData);
+
+    // ✅ garante vaga (no back é obrigatório)
+    if (!formData.vagaId) {
+      toast({ title: "Selecione uma vaga", variant: "destructive" });
+      return;
+    }
+
+    createEntradaMutation.mutate(formData);
   };
 
-  const handleAbrirSaida = (veiculo: Veiculo) => {
-    setVeiculoSaida(veiculo);
+  const handleAbrirSaida = (entrada: EntradaAtiva) => {
+    setEntradaSaida(entrada);
     setSaidaData({
-      cte: veiculo.cte || "",
-      nf: veiculo.nf || "",
-      lacre: veiculo.lacre || "",
+      cte: entrada.cte || "",
+      nf: entrada.nf || "",
+      lacre: entrada.lacre || "",
     });
     setSaidaDialogOpen(true);
   };
 
   const handleConfirmarSaida = () => {
-    if (veiculoSaida) {
-      registrarSaidaMutation.mutate({ veiculoId: veiculoSaida.id, data: saidaData });
+    if (entradaSaida) {
+      registrarSaidaMutation.mutate({ entradaId: entradaSaida.id, data: saidaData });
     }
   };
 
-  const veiculosHoje = veiculos?.filter((v) => {
+  const veiculosHoje = entradasHoje?.filter((v) => {
     const hoje = new Date();
-    const entrada = new Date(v.dataEntrada);
-    return entrada.toDateString() === hoje.toDateString();
+    return new Date(v.dataEntrada).toDateString() === hoje.toDateString();
   });
 
-  const veiculosAtivos = veiculos?.filter((v) => !v.dataSaida);
+  const veiculosAtivos = entradasAtivas;
 
-  const vagasLivres = vagas?.filter((v) => v.status === "livre").length || 0;
-  const vagasOcupadas = vagas?.filter((v) => v.status === "ocupada").length || 0;
+  const vagasLivres = vagas?.filter((v) => (v.status || "").toLowerCase() === "livre").length ?? 0;
+  const vagasOcupadas = vagas?.filter((v) => (v.status || "").toLowerCase() === "ocupada").length ?? 0;
 
-  const visitantesAguardando = visitantes?.filter((v) => v.status === "aguardando").length || 0;
-  const visitantesAprovados = visitantes?.filter((v) => v.status === "aprovado").length || 0;
+  const visitantesAguardando = visitantes?.filter((v) => v.status === "aguardando").length ?? 0;
+  const visitantesAprovados = visitantes?.filter((v) => v.status === "aprovado").length ?? 0;
 
-  // Selection Cards View
   if (operationMode === "selection") {
     return (
-      <div className="p-4 md:p-6 space-y-4 md:space-y-6 max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="text-center space-y-2">
-          <h1 className="text-2xl md:text-3xl font-bold text-foreground">Controle de Portaria</h1>
-          <p className="text-sm md:text-base text-muted-foreground">Selecione uma operação para começar</p>
+      <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6">
+        <div className="text-center">
+          <h1 className="text-3xl font-bold">Controle de Portaria</h1>
+          <p className="text-muted-foreground">Selecione uma operação</p>
         </div>
 
-        {/* Selection Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto mt-8">
-          {/* Veículos Card */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
           <Card
-            className="cursor-pointer transition-all hover-elevate active-elevate-2 border-2"
+            className="cursor-pointer hover-elevate"
             onClick={() => setOperationMode("veiculo")}
-            data-testid="card-select-veiculo"
           >
             <CardHeader className="text-center space-y-4 p-8">
               <div className="flex justify-center">
-                <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-primary/10">
+                <div className="h-24 w-24 flex items-center justify-center bg-primary/10 rounded-2xl">
                   <Truck className="h-12 w-12 text-primary" />
                 </div>
               </div>
-              <div>
-                <CardTitle className="text-2xl">Veículos</CardTitle>
-                <CardDescription className="mt-2">
-                  Registrar entrada e saída de veículos
-                </CardDescription>
-              </div>
+              <CardTitle className="text-2xl">Veículos</CardTitle>
+              <CardDescription>Registrar entrada e saída</CardDescription>
             </CardHeader>
             <CardContent className="text-center pb-8">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <p className="text-muted-foreground">Ativos</p>
-                  <p className="text-2xl font-bold text-foreground">{veiculosAtivos?.length || 0}</p>
+                  <p className="text-2xl font-bold">{veiculosAtivos?.length ?? 0}</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Hoje</p>
-                  <p className="text-2xl font-bold text-foreground">{veiculosHoje?.length || 0}</p>
+                  <p className="text-2xl font-bold">{veiculosHoje?.length ?? 0}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Visitantes Card */}
           <Card
-            className="cursor-pointer transition-all hover-elevate active-elevate-2 border-2"
+            className="cursor-pointer hover-elevate"
             onClick={() => setLocation("/visitantes")}
-            data-testid="card-select-visitante"
           >
             <CardHeader className="text-center space-y-4 p-8">
               <div className="flex justify-center">
-                <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-emerald-500/10">
+                <div className="h-24 w-24 flex items-center justify-center bg-emerald-500/10 rounded-2xl">
                   <UserCheck className="h-12 w-12 text-emerald-600" />
                 </div>
               </div>
-              <div>
-                <CardTitle className="text-2xl">Visitantes</CardTitle>
-                <CardDescription className="mt-2">
-                  Gerenciar visitantes e prestadores
-                </CardDescription>
-              </div>
+              <CardTitle className="text-2xl">Visitantes</CardTitle>
+              <CardDescription>Gerenciar acesso</CardDescription>
             </CardHeader>
             <CardContent className="text-center pb-8">
               <div className="grid grid-cols-2 gap-4 text-sm">
@@ -311,18 +397,17 @@ export default function PortariaPage() {
           </Card>
         </div>
 
-        {/* Quick Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-2 gap-3 md:gap-4 max-w-2xl mx-auto mt-8">
+        <div className="grid grid-cols-2 gap-4 max-w-xl mx-auto">
           <Card>
-            <CardHeader className="p-4 md:pb-2">
-              <CardDescription className="text-xs md:text-sm">Vagas Livres</CardDescription>
-              <CardTitle className="text-2xl md:text-3xl text-emerald-600">{vagasLivres}</CardTitle>
+            <CardHeader>
+              <CardDescription>Vagas Livres</CardDescription>
+              <CardTitle className="text-3xl text-emerald-600">{vagasLivres}</CardTitle>
             </CardHeader>
           </Card>
           <Card>
-            <CardHeader className="p-4 md:pb-2">
-              <CardDescription className="text-xs md:text-sm">Vagas Ocupadas</CardDescription>
-              <CardTitle className="text-2xl md:text-3xl text-rose-600">{vagasOcupadas}</CardTitle>
+            <CardHeader>
+              <CardDescription>Vagas Ocupadas</CardDescription>
+              <CardTitle className="text-3xl text-rose-600">{vagasOcupadas}</CardTitle>
             </CardHeader>
           </Card>
         </div>
@@ -330,159 +415,72 @@ export default function PortariaPage() {
     );
   }
 
-  // Veículos View
   return (
-    <div className="p-4 md:p-6 space-y-4 md:space-y-6 max-w-7xl mx-auto">
-      {/* Header with Back Button */}
+    <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6">
       <div className="flex items-center gap-4">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setOperationMode("selection")}
-          data-testid="button-back-to-selection"
-        >
+        <Button variant="ghost" size="icon" onClick={() => setOperationMode("selection")}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-foreground">Controle de Veículos</h1>
-          <p className="text-sm md:text-base text-muted-foreground">Gerencie entrada e saída de veículos</p>
+          <h1 className="text-3xl font-bold">Controle de Veículos</h1>
+          <p className="text-muted-foreground">Gerencie entradas e saídas</p>
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-        <Card>
-          <CardHeader className="p-4 md:pb-2">
-            <CardDescription className="text-xs md:text-sm">Veículos Ativos</CardDescription>
-            <CardTitle className="text-2xl md:text-3xl">{veiculosAtivos?.length || 0}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="p-4 md:pb-2">
-            <CardDescription className="text-xs md:text-sm">Entradas Hoje</CardDescription>
-            <CardTitle className="text-2xl md:text-3xl">{veiculosHoje?.length || 0}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="p-4 md:pb-2">
-            <CardDescription className="text-xs md:text-sm">Vagas Livres</CardDescription>
-            <CardTitle className="text-2xl md:text-3xl text-emerald-600">{vagasLivres}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="p-4 md:pb-2">
-            <CardDescription className="text-xs md:text-sm">Vagas Ocupadas</CardDescription>
-            <CardTitle className="text-2xl md:text-3xl text-rose-600">{vagasOcupadas}</CardTitle>
-          </CardHeader>
-        </Card>
-      </div>
-
-      {/* Main Content */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
-          <TabsTrigger value="entrada" data-testid="tab-entrada">
-            <Plus className="h-4 w-4 mr-2" />
-            Nova Entrada
+          <TabsTrigger value="entrada">
+            <Plus className="h-4 w-4 mr-2" /> Nova Entrada
           </TabsTrigger>
-          <TabsTrigger value="saida" data-testid="tab-saida">
-            <LogOut className="h-4 w-4 mr-2" />
-            Saída
+          <TabsTrigger value="saida">
+            <LogOut className="h-4 w-4 mr-2" /> Saída
           </TabsTrigger>
-          <TabsTrigger value="historico" data-testid="tab-historico">
-            <Clock className="h-4 w-4 mr-2" />
-            Histórico Hoje
+          <TabsTrigger value="historico">
+            <Clock className="h-4 w-4 mr-2" /> Histórico Hoje
           </TabsTrigger>
         </TabsList>
 
+        {/* FORMULÁRIO DE ENTRADA */}
         <TabsContent value="entrada" className="mt-6">
           <Card>
             <CardHeader>
-              <CardTitle>Registrar Entrada de Veículo</CardTitle>
-              <CardDescription>Preencha os dados do veículo e motorista</CardDescription>
+              <CardTitle>Registrar Entrada</CardTitle>
+              <CardDescription>Preencha os dados abaixo</CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-6">
-                {/* Tipo de Veículo */}
+                {/* Tipo veículo */}
                 <div className="space-y-2">
-                  <Label htmlFor="tipoVeiculoCategoria">Tipo de Veículo *</Label>
+                  <Label>Tipo de Veículo *</Label>
                   <Select
                     value={formData.tipoVeiculoCategoria}
-                    onValueChange={(value: any) => setFormData({ ...formData, tipoVeiculoCategoria: value })}
+                    onValueChange={(v) => setFormData({ ...formData, tipoVeiculoCategoria: v })}
                   >
-                    <SelectTrigger id="tipoVeiculoCategoria" data-testid="select-tipo-veiculo">
-                      <SelectValue />
-                    </SelectTrigger>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="carro">Carro</SelectItem>
                       <SelectItem value="moto">Moto</SelectItem>
-                      <SelectItem value="cavalo">Cavalo (sem carreta)</SelectItem>
+                      <SelectItem value="cavalo">Cavalo</SelectItem>
                       <SelectItem value="cavalo_carreta">Cavalo + Carreta</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
-                {/* Data e Hora de Entrada (Fixada) */}
-                <div className="space-y-2">
-                  <Label htmlFor="dataHoraEntrada">Data e Hora de Entrada</Label>
-                  <Input
-                    id="dataHoraEntrada"
-                    data-testid="input-data-hora-entrada"
-                    value={format(new Date(), "dd/MM/yyyy HH:mm")}
-                    readOnly
-                    className="bg-muted cursor-not-allowed"
-                  />
+                {/* Data / hora */}
+                <div>
+                  <Label>Data Entrada</Label>
+                  <Input readOnly value={format(new Date(), "dd/MM/yyyy HH:mm")} />
                 </div>
 
-                {/* For Cavalo/Cavalo+Carreta - Show Proprietário and Status Carga */}
-                {!isVeiculoLeve && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="tipoProprietario">Proprietário *</Label>
-                      <Select
-                        value={formData.tipoProprietario}
-                        onValueChange={(value: any) => setFormData({ ...formData, tipoProprietario: value })}
-                      >
-                        <SelectTrigger id="tipoProprietario" data-testid="select-tipo-proprietario">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="terceiro">Terceiro</SelectItem>
-                          <SelectItem value="agregado">Agregado</SelectItem>
-                          <SelectItem value="frota">Frota</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="statusCarga">Status da Carga</Label>
-                      <Select
-                        value={formData.statusCarga || undefined}
-                        onValueChange={(value: any) => setFormData({ ...formData, statusCarga: value || "" })}
-                      >
-                        <SelectTrigger id="statusCarga" data-testid="select-status-carga">
-                          <SelectValue placeholder="Não informado" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="carregado">Carregado</SelectItem>
-                          <SelectItem value="descarregado">Descarregado</SelectItem>
-                          <SelectItem value="pernoite">Pernoite</SelectItem>
-                          <SelectItem value="manutencao">Manutenção</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                )}
-
-                {/* For Carro/Moto - Show Visitante/Funcionário */}
+                {/* Carro/Moto → Visitante/Funcionário */}
                 {isVeiculoLeve && (
-                  <div className="space-y-2">
-                    <Label htmlFor="tipoMotorista">Tipo *</Label>
+                  <div>
+                    <Label>Tipo *</Label>
                     <Select
                       value={formData.tipoMotorista}
-                      onValueChange={(value: any) => setFormData({ ...formData, tipoMotorista: value })}
+                      onValueChange={(v) => setFormData({ ...formData, tipoMotorista: v })}
                     >
-                      <SelectTrigger id="tipoMotorista" data-testid="select-tipo-motorista">
-                        <SelectValue />
-                      </SelectTrigger>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="visitante">Visitante</SelectItem>
                         <SelectItem value="funcionario">Funcionário</SelectItem>
@@ -491,226 +489,229 @@ export default function PortariaPage() {
                   </div>
                 )}
 
-                {/* Dados do Veículo */}
+                {/* Placas + motorista */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="placaCavalo">
-                      Placa {formData.tipoVeiculoCategoria === "carro" ? "Carro" : formData.tipoVeiculoCategoria === "moto" ? "Moto" : "Cavalo"} *
-                    </Label>
+                  <div>
+                    <Label>Placa *</Label>
                     <Input
-                      id="placaCavalo"
-                      data-testid="input-placa-cavalo"
-                      placeholder="ABC-1234"
-                      value={formData.placaCavalo}
-                      onChange={(e) => setFormData({ ...formData, placaCavalo: e.target.value.toUpperCase() })}
                       required
+                      value={formData.placaCavalo}
+                      onChange={(e) =>
+                        setFormData({ ...formData, placaCavalo: e.target.value.toUpperCase() })
+                      }
                     />
                   </div>
+
                   {formData.tipoVeiculoCategoria === "cavalo_carreta" && (
-                    <div className="space-y-2">
-                      <Label htmlFor="placaCarreta">Placa Carreta</Label>
+                    <div>
+                      <Label>Placa Carreta</Label>
                       <Input
-                        id="placaCarreta"
-                        data-testid="input-placa-carreta"
-                        placeholder="DEF-5678"
                         value={formData.placaCarreta}
-                        onChange={(e) => setFormData({ ...formData, placaCarreta: e.target.value.toUpperCase() })}
+                        onChange={(e) =>
+                          setFormData({ ...formData, placaCarreta: e.target.value.toUpperCase() })
+                        }
                       />
                     </div>
                   )}
-                  <div className="space-y-2">
-                    <Label htmlFor="motorista">Motorista *</Label>
+
+                  <div>
+                    <Label>Motorista *</Label>
                     <Input
-                      id="motorista"
-                      data-testid="input-motorista"
-                      placeholder="Nome do motorista"
+                      required
                       value={formData.motorista}
                       onChange={(e) => setFormData({ ...formData, motorista: e.target.value })}
-                      required
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="cpfMotorista">CPF Motorista {!isVeiculoLeve && "*"}</Label>
+
+                  <div>
+                    <Label>CPF {isVeiculoLeve ? "" : "*"}</Label>
                     <Input
-                      id="cpfMotorista"
-                      data-testid="input-cpf-motorista"
-                      placeholder="000.000.000-00"
+                      required={!isVeiculoLeve}
                       value={formData.cpfMotorista}
                       onChange={(e) => setFormData({ ...formData, cpfMotorista: e.target.value })}
-                      required={!isVeiculoLeve}
                     />
                   </div>
-                  
-                  {/* Only for Cavalo/Cavalo+Carreta */}
-                  {!isVeiculoLeve && (
-                    <>
-                      <div className="space-y-2">
-                        <Label htmlFor="transportadora">Transportadora</Label>
-                        <Input
-                          id="transportadora"
-                          data-testid="input-transportadora"
-                          placeholder="Nome da transportadora"
-                          value={formData.transportadora}
-                          onChange={(e) => setFormData({ ...formData, transportadora: e.target.value })}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="cliente">Cliente</Label>
-                        <Input
-                          id="cliente"
-                          data-testid="input-cliente"
-                          placeholder="Nome do cliente"
-                          value={formData.cliente}
-                          onChange={(e) => setFormData({ ...formData, cliente: e.target.value })}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="doca">Doca</Label>
-                        <Input
-                          id="doca"
-                          data-testid="input-doca"
-                          placeholder="Número da doca"
-                          value={formData.doca}
-                          onChange={(e) => setFormData({ ...formData, doca: e.target.value })}
-                        />
-                      </div>
-                    </>
-                  )}
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="vagaId">Vaga</Label>
-                    <Select
-                      value={formData.vagaId}
-                      onValueChange={(value) => setFormData({ ...formData, vagaId: value })}
-                    >
-                      <SelectTrigger id="vagaId" data-testid="select-vaga">
-                        <SelectValue placeholder="Selecione uma vaga" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {vagas?.filter(v => v.status === "livre").map((vaga) => (
-                          <SelectItem key={vaga.id} value={vaga.id}>
-                            Vaga {vaga.numero}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  {/* Only for Cavalo/Cavalo+Carreta */}
-                  {!isVeiculoLeve && (
-                    <>
-                      <div className="space-y-2">
-                        <Label htmlFor="valor">Valor (R$)</Label>
-                        <Input
-                          id="valor"
-                          data-testid="input-valor"
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          placeholder="0.00"
-                          value={formData.valor}
-                          onChange={(e) => setFormData({ ...formData, valor: e.target.value })}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="cte">CTE</Label>
-                        <Input
-                          id="cte"
-                          data-testid="input-cte"
-                          placeholder="Número do CTE"
-                          value={formData.cte}
-                          onChange={(e) => setFormData({ ...formData, cte: e.target.value })}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="nf">NF (Nota Fiscal)</Label>
-                        <Input
-                          id="nf"
-                          data-testid="input-nf"
-                          placeholder="Número da NF"
-                          value={formData.nf}
-                          onChange={(e) => setFormData({ ...formData, nf: e.target.value })}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="lacre">Lacre</Label>
-                        <Input
-                          id="lacre"
-                          data-testid="input-lacre"
-                          placeholder="Número do Lacre"
-                          value={formData.lacre}
-                          onChange={(e) => setFormData({ ...formData, lacre: e.target.value })}
-                        />
-                      </div>
-                      <div className="space-y-2 flex items-end">
-                        <label className="flex items-center space-x-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            id="multi"
-                            data-testid="checkbox-multi"
-                            checked={formData.multi}
-                            onChange={(e) => setFormData({ ...formData, multi: e.target.checked })}
-                            className="h-4 w-4 rounded border-input"
-                          />
-                          <Label htmlFor="multi" className="cursor-pointer">Multi</Label>
-                        </label>
-                      </div>
-                    </>
-                  )}
                 </div>
+
+                {/* Seleção de Vaga */}
                 <div className="space-y-2">
-                  <Label htmlFor="observacoes">Observações</Label>
+                  <Label>Vaga *</Label>
+                  <Select
+                    value={formData.vagaId}
+                    onValueChange={(v) => setFormData({ ...formData, vagaId: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione uma vaga" />
+                    </SelectTrigger>
+
+                    <SelectContent>
+                      {vagas?.length ? (
+                        vagas
+                          .filter(v => (v.status || "").toLowerCase() === "livre") // mostra só livres no select
+                          .map((vaga) => (
+                            <SelectItem key={vaga.id} value={String(vaga.id)}>
+                              {vaga.NomeVaga} — {vaga.tipoVaga?.Nome}
+                            </SelectItem>
+                          ))
+                      ) : (
+                        <SelectItem disabled value="0">
+                          Nenhuma vaga encontrada
+                        </SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Campos pesados */}
+                {!isVeiculoLeve && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label>Proprietário *</Label>
+                      <Select
+                        value={formData.tipoProprietario}
+                        onValueChange={(v) => setFormData({ ...formData, tipoProprietario: v })}
+                      >
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="terceiro">Terceiro</SelectItem>
+                          <SelectItem value="agregado">Agregado</SelectItem>
+                          <SelectItem value="frota">Frota</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label>Status Carga</Label>
+                      <Select
+                        value={formData.statusCarga}
+                        onValueChange={(v) => setFormData({ ...formData, statusCarga: v })}
+                      >
+                        <SelectTrigger><SelectValue placeholder="Não informado" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="carregado">Carregado</SelectItem>
+                          <SelectItem value="descarregado">Descarregado</SelectItem>
+                          <SelectItem value="pernoite">Pernoite</SelectItem>
+                          <SelectItem value="manutencao">Manutenção</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label>Transportadora</Label>
+                      <Input
+                        value={formData.transportadora}
+                        onChange={(e) => setFormData({ ...formData, transportadora: e.target.value })}
+                      />
+                    </div>
+
+                    <div>
+                      <Label>Cliente</Label>
+                      <Input
+                        value={formData.cliente}
+                        onChange={(e) => setFormData({ ...formData, cliente: e.target.value })}
+                      />
+                    </div>
+
+                    <div>
+                      <Label>Doca</Label>
+                      <Input
+                        value={formData.doca}
+                        onChange={(e) => setFormData({ ...formData, doca: e.target.value })}
+                      />
+                    </div>
+
+                    <div>
+                      <Label>Valor</Label>
+                      <Input
+                        type="number"
+                        value={formData.valor}
+                        onChange={(e) => setFormData({ ...formData, valor: e.target.value })}
+                      />
+                    </div>
+
+                    <div>
+                      <Label>CTE</Label>
+                      <Input
+                        value={formData.cte}
+                        onChange={(e) => setFormData({ ...formData, cte: e.target.value })}
+                      />
+                    </div>
+
+                    <div>
+                      <Label>NF</Label>
+                      <Input
+                        value={formData.nf}
+                        onChange={(e) => setFormData({ ...formData, nf: e.target.value })}
+                      />
+                    </div>
+
+                    <div>
+                      <Label>Lacre</Label>
+                      <Input
+                        value={formData.lacre}
+                        onChange={(e) => setFormData({ ...formData, lacre: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-2 mt-6">
+                      <input
+                        type="checkbox"
+                        checked={formData.multi}
+                        onChange={(e) => setFormData({ ...formData, multi: e.target.checked })}
+                      />
+                      <Label>Multi</Label>
+                    </div>
+                  </div>
+                )}
+
+                {/* Observações */}
+                <div>
+                  <Label>Observações</Label>
                   <Textarea
-                    id="observacoes"
-                    data-testid="textarea-observacoes"
-                    placeholder="Informações adicionais..."
+                    rows={3}
                     value={formData.observacoes}
                     onChange={(e) => setFormData({ ...formData, observacoes: e.target.value })}
-                    rows={3}
                   />
                 </div>
+
                 <div className="flex justify-end gap-2">
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => setFormData({
-                      tipoVeiculoCategoria: "cavalo_carreta",
-                      tipoProprietario: "terceiro",
-                      statusCarga: "",
-                      tipoMotorista: "visitante",
-                      placaCavalo: "",
-                      placaCarreta: "",
-                      motorista: "",
-                      cpfMotorista: "",
-                      transportadora: "",
-                      cliente: "",
-                      doca: "",
-                      vagaId: "",
-                      multi: false,
-                      valor: "",
-                      cte: "",
-                      nf: "",
-                      lacre: "",
-                      observacoes: "",
-                    })}
-                    data-testid="button-limpar"
+                    onClick={() =>
+                      setFormData({
+                        tipoVeiculoCategoria: "cavalo_carreta",
+                        tipoProprietario: "terceiro",
+                        statusCarga: "",
+                        tipoMotorista: "visitante",
+                        placaCavalo: "",
+                        placaCarreta: "",
+                        motorista: "",
+                        cpfMotorista: "",
+                        transportadora: "",
+                        cliente: "",
+                        doca: "",
+                        vagaId: "",
+                        multi: false,
+                        valor: "",
+                        cte: "",
+                        nf: "",
+                        lacre: "",
+                        observacoes: "",
+                      })
+                    }
                   >
                     Limpar
                   </Button>
-                  <Button
-                    type="submit"
-                    disabled={createVeiculoMutation.isPending}
-                    data-testid="button-registrar-entrada"
-                  >
-                    {createVeiculoMutation.isPending ? (
+
+                  <Button type="submit" disabled={createEntradaMutation.isPending}>
+                    {createEntradaMutation.isPending ? (
                       <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Registrando...
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Registrando...
                       </>
                     ) : (
                       <>
-                        <Truck className="mr-2 h-4 w-4" />
-                        Registrar Entrada
+                        <Truck className="mr-2 h-4 w-4" /> Registrar Entrada
                       </>
                     )}
                   </Button>
@@ -720,118 +721,87 @@ export default function PortariaPage() {
           </Card>
         </TabsContent>
 
+        {/* SAÍDA */}
         <TabsContent value="saida" className="mt-6">
           <Card>
             <CardHeader>
               <CardTitle>Veículos no Pátio</CardTitle>
-              <CardDescription>Selecione um veículo para registrar saída</CardDescription>
+              <CardDescription>Selecione um para registrar saída</CardDescription>
             </CardHeader>
             <CardContent>
               {loadingVeiculos ? (
-                <div className="flex justify-center py-8">
-                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                <div className="py-8 text-center">
+                  <Loader2 className="h-8 w-8 animate-spin mx-auto" />
                 </div>
-              ) : veiculosAtivos && veiculosAtivos.length > 0 ? (
+              ) : veiculosAtivos?.length ? (
                 <div className="space-y-2">
-                  {veiculosAtivos.map((veiculo) => (
-                    <div
-                      key={veiculo.id}
-                      className="flex items-center justify-between p-4 border rounded-lg hover-elevate"
-                      data-testid={`veiculo-${veiculo.placaCavalo}`}
-                    >
-                      <div className="flex-1 space-y-1">
-                        <div className="flex items-center gap-2">
-                          <Truck className="h-4 w-4 text-muted-foreground" />
-                          <span className="font-medium" data-testid={`text-placa-${veiculo.placaCavalo}`}>{veiculo.placaCavalo}</span>
-                          {veiculo.placaCarreta && (
-                            <span className="text-sm text-muted-foreground">+ {veiculo.placaCarreta}</span>
-                          )}
-                        </div>
+                  {veiculosAtivos.map((entrada) => (
+                    <div key={entrada.id} className="flex items-center justify-between p-4 border rounded-lg">
+                      <div>
+                        <div className="font-medium">{entrada.placaCavalo}</div>
                         <div className="text-sm text-muted-foreground">
-                          Motorista: {veiculo.motorista}
+                          Motorista: {entrada.motorista}
                         </div>
-                        <div className="flex items-center gap-2">
-                          <StatusBadge status={veiculo.situacao} type="veiculo" />
-                          <span className="text-xs text-muted-foreground">
-                            Entrada: {format(new Date(veiculo.dataEntrada), "dd/MM/yyyy HH:mm", { locale: ptBR })}
-                          </span>
-                        </div>
+
+                        {/* você pode manter seus badges */}
+                        <Badge variant="outline">{entrada.status ?? "ativo"}</Badge>
                       </div>
-                      <Button
-                        onClick={() => handleAbrirSaida(veiculo)}
-                        disabled={registrarSaidaMutation.isPending}
-                        data-testid={`button-saida-${veiculo.placaCavalo}`}
-                      >
-                        <LogOut className="mr-2 h-4 w-4" />
-                        Registrar Saída
+
+                      <Button onClick={() => handleAbrirSaida(entrada)}>
+                        <LogOut className="mr-2 h-4 w-4" /> Registrar Saída
                       </Button>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-8">
-                  <Truck className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-                  <p className="text-muted-foreground">Nenhum veículo no pátio</p>
+                <div className="py-8 text-center text-muted-foreground">
+                  <Truck className="h-12 w-12 mx-auto opacity-50" />
+                  Nenhum veículo no pátio
                 </div>
               )}
             </CardContent>
           </Card>
         </TabsContent>
 
+        {/* HISTÓRICO */}
         <TabsContent value="historico" className="mt-6">
           <Card>
             <CardHeader>
-              <CardTitle>Movimentações de Hoje</CardTitle>
-              <CardDescription>Histórico de entradas e saídas do dia</CardDescription>
+              <CardTitle>Movimentações Hoje</CardTitle>
+              <CardDescription>Histórico de entradas e saídas</CardDescription>
             </CardHeader>
             <CardContent>
               {loadingVeiculos ? (
-                <div className="flex justify-center py-8">
-                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                <div className="py-8 text-center">
+                  <Loader2 className="h-8 w-8 animate-spin mx-auto" />
                 </div>
-              ) : veiculosHoje && veiculosHoje.length > 0 ? (
-                <div className="space-y-2">
-                  {veiculosHoje.map((veiculo) => (
-                    <div
-                      key={veiculo.id}
-                      className="p-4 border rounded-lg"
-                      data-testid={`historico-${veiculo.placaCavalo}`}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <Truck className="h-4 w-4 text-muted-foreground" />
-                            <span className="font-medium" data-testid={`text-placa-${veiculo.placaCavalo}`}>{veiculo.placaCavalo}</span>
-                            {veiculo.placaCarreta && (
-                              <span className="text-sm text-muted-foreground">+ {veiculo.placaCarreta}</span>
-                            )}
-                          </div>
+              ) : veiculosHoje?.length ? (
+                <div className="space-y-3">
+                  {veiculosHoje.map((entrada) => (
+                    <div key={entrada.id} className="p-4 border rounded-lg">
+                      <div className="flex justify-between">
+                        <div>
+                          <div className="font-medium">{entrada.placaCavalo}</div>
                           <div className="text-sm text-muted-foreground">
-                            Motorista: {veiculo.motorista}
-                          </div>
-                          {veiculo.transportadora && (
-                            <div className="text-sm text-muted-foreground">
-                              Transportadora: {veiculo.transportadora}
-                            </div>
-                          )}
-                          <div className="flex items-center gap-2 mt-2">
-                            <StatusBadge status={veiculo.situacao} type="veiculo" />
+                            Motorista: {entrada.motorista}
                           </div>
                         </div>
                         <div className="text-right text-sm text-muted-foreground">
-                          <div>Entrada: {format(new Date(veiculo.dataEntrada), "HH:mm", { locale: ptBR })}</div>
-                          {veiculo.dataSaida && (
-                            <div>Saída: {format(new Date(veiculo.dataSaida), "HH:mm", { locale: ptBR })}</div>
+                          Entrada: {format(new Date(entrada.dataEntrada), "HH:mm")}
+                          {entrada.dataSaida && (
+                            <div>Saída: {format(new Date(entrada.dataSaida), "HH:mm")}</div>
                           )}
                         </div>
                       </div>
+
+                      <Badge variant="outline">{entrada.status ?? "ativo"}</Badge>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-8">
-                  <Clock className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-                  <p className="text-muted-foreground">Nenhuma movimentação hoje</p>
+                <div className="py-8 text-center text-muted-foreground">
+                  <Clock className="h-12 w-12 mx-auto opacity-50" />
+                  Nenhuma movimentação hoje
                 </div>
               )}
             </CardContent>
@@ -839,105 +809,57 @@ export default function PortariaPage() {
         </TabsContent>
       </Tabs>
 
-      {/* Dialog de Saída com CTE, NF, LACRE */}
+      {/* DIALOG SAÍDA */}
       <Dialog open={saidaDialogOpen} onOpenChange={setSaidaDialogOpen}>
-        <DialogContent data-testid="dialog-saida-veiculo">
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle>Registrar Saída de Veículo</DialogTitle>
-            <DialogDescription>
-              Confirme ou atualize os dados antes de finalizar a saída
-            </DialogDescription>
+            <DialogTitle>Registrar Saída</DialogTitle>
           </DialogHeader>
-          {veiculoSaida && (
+
+          {entradaSaida && (
             <div className="space-y-4">
-              {/* Informações do Veículo */}
-              <div className="p-4 bg-muted rounded-lg space-y-2">
-                <div className="flex items-center gap-2">
-                  <Truck className="h-4 w-4 text-muted-foreground" />
-                  <span className="font-medium">{veiculoSaida.placaCavalo}</span>
-                  {veiculoSaida.placaCarreta && (
-                    <span className="text-sm text-muted-foreground">+ {veiculoSaida.placaCarreta}</span>
-                  )}
-                </div>
+              <div className="p-4 bg-muted rounded-lg">
+                <div className="font-medium">{entradaSaida.placaCavalo}</div>
                 <div className="text-sm text-muted-foreground">
-                  Motorista: {veiculoSaida.motorista}
+                  Motorista: {entradaSaida.motorista}
                 </div>
-                {veiculoSaida.transportadora && (
-                  <div className="text-sm text-muted-foreground">
-                    Transportadora: {veiculoSaida.transportadora}
-                  </div>
-                )}
               </div>
 
-              {/* Data e Hora de Saída (Fixada) */}
-              <div className="space-y-2">
-                <Label htmlFor="dataHoraSaida">Data e Hora de Saída</Label>
-                <Input
-                  id="dataHoraSaida"
-                  data-testid="input-data-hora-saida"
-                  value={format(new Date(), "dd/MM/yyyy HH:mm")}
-                  readOnly
-                  className="bg-muted cursor-not-allowed"
-                />
+              <div>
+                <Label>Data Saída</Label>
+                <Input readOnly value={format(new Date(), "dd/MM/yyyy HH:mm")} />
               </div>
 
-              {/* CTE, NF, LACRE */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="cte-saida">CTE</Label>
-                  <Input
-                    id="cte-saida"
-                    data-testid="input-cte-saida"
-                    placeholder="CTE"
-                    value={saidaData.cte}
-                    onChange={(e) => setSaidaData({ ...saidaData, cte: e.target.value })}
-                  />
+                <div>
+                  <Label>CTE</Label>
+                  <Input value={saidaData.cte} onChange={(e) => setSaidaData({ ...saidaData, cte: e.target.value })} />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="nf-saida">NF</Label>
-                  <Input
-                    id="nf-saida"
-                    data-testid="input-nf-saida"
-                    placeholder="Nota Fiscal"
-                    value={saidaData.nf}
-                    onChange={(e) => setSaidaData({ ...saidaData, nf: e.target.value })}
-                  />
+                <div>
+                  <Label>NF</Label>
+                  <Input value={saidaData.nf} onChange={(e) => setSaidaData({ ...saidaData, nf: e.target.value })} />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="lacre-saida">Lacre</Label>
-                  <Input
-                    id="lacre-saida"
-                    data-testid="input-lacre-saida"
-                    placeholder="Lacre"
-                    value={saidaData.lacre}
-                    onChange={(e) => setSaidaData({ ...saidaData, lacre: e.target.value })}
-                  />
+                <div>
+                  <Label>Lacre</Label>
+                  <Input value={saidaData.lacre} onChange={(e) => setSaidaData({ ...saidaData, lacre: e.target.value })} />
                 </div>
               </div>
             </div>
           )}
+
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setSaidaDialogOpen(false)}
-              data-testid="button-cancelar-saida"
-            >
+            <Button variant="outline" onClick={() => setSaidaDialogOpen(false)}>
               Cancelar
             </Button>
-            <Button
-              onClick={handleConfirmarSaida}
-              disabled={registrarSaidaMutation.isPending}
-              data-testid="button-confirmar-saida"
-            >
+
+            <Button onClick={handleConfirmarSaida} disabled={registrarSaidaMutation.isPending}>
               {registrarSaidaMutation.isPending ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Registrando...
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Registrando...
                 </>
               ) : (
                 <>
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Confirmar Saída
+                  <LogOut className="mr-2 h-4 w-4" /> Confirmar Saída
                 </>
               )}
             </Button>

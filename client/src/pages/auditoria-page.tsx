@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { FileText, Loader2, Shield } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import type { AuditLog } from "@shared/schema";
+import type { AuditLog } from "@/shared/schema";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 

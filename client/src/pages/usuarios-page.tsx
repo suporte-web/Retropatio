@@ -4,11 +4,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Users, Plus, Loader2, Edit, Trash2, Building2, X } from "lucide-react";
+import { Users, Plus, Loader2, Edit, Trash2, Building2, X, KeyRound } from "lucide-react";
 import { RoleBadge } from "@/components/role-badge";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { User, Filial } from "@shared/schema";
+import type { User, Filial } from "@/shared/schema";
 import {
   Dialog,
   DialogContent,
@@ -30,40 +30,57 @@ type UserPermission = {
 
 export default function UsuariosPage() {
   const { toast } = useToast();
+
+
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [showPermissionsDialog, setShowPermissionsDialog] = useState(false);
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+
+  // EDITAR USUÁRIO
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editFormData, setEditFormData] = useState({
+  nome: "",
+  email: "",
+  username: "",
+  role: "",
+});
+
+
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedFilialId, setSelectedFilialId] = useState<string>("");
 
+  const [passwordInput, setPasswordInput] = useState("");
+
   const [formData, setFormData] = useState({
+    nome: "",
     username: "",
     email: "",
     password: "",
-    nome: "",
-    role: "porteiro" as "porteiro" | "cliente" | "gestor",
+    role: "porteiro",
   });
 
   const { data: users, isLoading } = useQuery<User[]>({
-    queryKey: ["/api/users"],
+     queryKey: ["/api/users"],
+     queryFn: () => apiRequest("GET", "/api/users").then(res => res.json()),
   });
 
   const { data: allFiliais } = useQuery<Filial[]>({
     queryKey: ["/api/filiais"],
+    queryFn: () => apiRequest("GET", "/api/filiais").then(res => res.json()),
   });
 
-  const { data: currentUserFilialIds } = useQuery<string[]>({
-    queryKey: ["/api/user-filiais"],
-  });
+  const filiais = allFiliais ?? [];
 
-  // Only show filiais that the current gestor has access to
-  const filiais = allFiliais?.filter(f => currentUserFilialIds?.includes(f.id));
 
   const { data: userPermissions, isLoading: isLoadingPermissions } = useQuery<UserPermission[]>({
     queryKey: ["/api/users", selectedUserId, "permissions"],
     enabled: !!selectedUserId,
+    queryFn: () =>
+      apiRequest("GET", `/api/users/${selectedUserId}/permissions`).then(res => res.json()),
   });
 
+  // Criar usuário
   const createUserMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
       const res = await apiRequest("POST", "/api/users", data);
@@ -71,42 +88,62 @@ export default function UsuariosPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
-      toast({
-        title: "Usuário criado",
-        description: "Novo usuário adicionado com sucesso",
-      });
+      toast({ title: "Usuário criado", description: "Novo usuário foi adicionado." });
+
       setFormData({
+        nome: "",
         username: "",
         email: "",
         password: "",
-        nome: "",
         role: "porteiro",
       });
+
       setShowNewDialog(false);
     },
     onError: (error: Error) => {
-      toast({
-        title: "Erro ao criar usuário",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast({ title: "Erro ao criar usuário", description: error.message, variant: "destructive" });
     },
   });
 
-  const toggleUserStatusMutation = useMutation({
-    mutationFn: async ({ userId, ativo }: { userId: string; ativo: boolean }) => {
-      const res = await apiRequest("PATCH", `/api/users/${userId}`, { ativo });
+// Ativar / Desativar usuário
+const toggleUserStatusMutation = useMutation({
+  mutationFn: async ({ userId, ativo }: { userId: string; ativo: boolean }) => {
+    const res = await apiRequest("PATCH", `/api/users/${userId}/ativo`, { ativo });
+    return await res.json();
+  },
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+    toast({ title: "Status atualizado", description: "O status do usuário foi alterado." });
+  },
+});
+
+
+  // Excluir usuário
+  const deleteUserMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const res = await apiRequest("DELETE", `/api/users/${userId}`);
       return await res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
-      toast({
-        title: "Status atualizado",
-        description: "Status do usuário alterado",
-      });
+      toast({ title: "Usuário removido", description: "O usuário foi excluído do sistema." });
     },
   });
 
+  // Alterar senha
+  const updatePasswordMutation = useMutation({
+    mutationFn: async ({ userId, novaSenha }: { userId: string; novaSenha: string }) => {
+      const res = await apiRequest("PUT", `/api/users/${userId}/senha`, { novaSenha });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Senha atualizada", description: "Senha alterada com sucesso." });
+      setShowPasswordDialog(false);
+      setPasswordInput("");
+    },
+  });
+
+  // Adicionar permissão
   const addPermissionMutation = useMutation({
     mutationFn: async ({ userId, filialId }: { userId: string; filialId: string }) => {
       const res = await apiRequest("POST", `/api/users/${userId}/permissions`, { filialId });
@@ -114,33 +151,39 @@ export default function UsuariosPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users", selectedUserId, "permissions"] });
-      toast({
-        title: "Permissão adicionada",
-        description: "Filial adicionada ao usuário com sucesso",
-      });
+      toast({ title: "Permissão adicionada", description: "Filial adicionada ao usuário." });
       setSelectedFilialId("");
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Erro ao adicionar permissão",
-        description: error.message,
-        variant: "destructive",
-      });
     },
   });
 
+  // Remover permissão
   const removePermissionMutation = useMutation({
+    
     mutationFn: async (permissionId: string) => {
-      await apiRequest("DELETE", `/api/user-permissions/${permissionId}`);
+      await apiRequest("DELETE", `/api/users/permissions/${permissionId}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users", selectedUserId, "permissions"] });
-      toast({
-        title: "Permissão removida",
-        description: "Filial removida do usuário",
-      });
+      toast({ title: "Permissão removida", description: "A filial foi removida." });
     },
   });
+
+  // Editar usuário (PUT)
+  const updateUserMutation = useMutation({
+  mutationFn: async ({ userId, data }: { userId: string; data: typeof editFormData }) => {
+    const res = await apiRequest("PUT", `/api/users/${userId}`, data);
+    return await res.json();
+  },
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+    toast({ title: "Usuário atualizado", description: "As informações foram salvas." });
+    setShowEditDialog(false);
+  },
+  onError: (error: Error) => {
+    toast({ title: "Erro ao atualizar", description: error.message, variant: "destructive" });
+  },
+});
+
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -148,15 +191,17 @@ export default function UsuariosPage() {
   };
 
   const filteredUsers = users?.filter((user) =>
-    user.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.username.toLowerCase().includes(searchTerm.toLowerCase())
+    user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    user.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const usuariosAtivos = users?.filter((u) => u.ativo).length || 0;
   const usuariosInativos = users?.filter((u) => !u.ativo).length || 0;
 
-  return (
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+    return (
     <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -226,14 +271,20 @@ export default function UsuariosPage() {
                   <div className="flex-1 space-y-1">
                     <div className="flex items-center gap-2">
                       <Users className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium">{user.nome}</span>
+                      <span className="font-medium">{user.username}</span>
                       <RoleBadge role={user.role} />
                       {user.ativo ? (
-                        <Badge variant="outline" className="bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-200 dark:border-emerald-800">
+                        <Badge
+                          variant="outline"
+                          className="bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-200 dark:border-emerald-800"
+                        >
                           Ativo
                         </Badge>
                       ) : (
-                        <Badge variant="outline" className="bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700">
+                        <Badge
+                          variant="outline"
+                          className="bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700"
+                        >
                           Inativo
                         </Badge>
                       )}
@@ -242,8 +293,29 @@ export default function UsuariosPage() {
                       {user.email} • @{user.username}
                     </div>
                   </div>
+
                   <div className="flex gap-2">
-                    <Button
+                      {/* Editar Usuário */}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setSelectedUserId(user.id);
+                          setEditFormData({
+                          nome: user.nome ?? "",
+                          email: user.email,
+                          username: user.username,
+                          role: user.role,
+                          });
+                            setShowEditDialog(true);
+                          }}
+                          >
+                        <Edit className="mr-2 h-4 w-4" />
+                        Editar
+                        </Button>
+
+                    {/* Gerenciar Filiais */}
+                      <Button
                       size="sm"
                       variant="outline"
                       onClick={() => {
@@ -255,14 +327,45 @@ export default function UsuariosPage() {
                       <Building2 className="mr-2 h-4 w-4" />
                       Filiais
                     </Button>
+
+                    {/* Ativar / Desativar */}
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => toggleUserStatusMutation.mutate({ userId: user.id, ativo: !user.ativo })}
+                      onClick={() =>
+                        toggleUserStatusMutation.mutate({ userId: user.id, ativo: !user.ativo })
+                      }
                       disabled={toggleUserStatusMutation.isPending}
                       data-testid={`button-toggle-${user.username}`}
                     >
                       {user.ativo ? "Desativar" : "Ativar"}
+                    </Button>
+
+                    {/* Alterar Senha */}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setSelectedUserId(user.id);
+                        setPasswordInput("");
+                        setShowPasswordDialog(true);
+                      }}
+                      data-testid={`button-password-${user.username}`}
+                    >
+                      <KeyRound className="mr-2 h-4 w-4" />
+                      Senha
+                    </Button>
+
+                    {/* Excluir usuário */}
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => deleteUserMutation.mutate(user.id)}
+                      disabled={deleteUserMutation.isPending}
+                      data-testid={`button-delete-${user.username}`}
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Excluir
                     </Button>
                   </div>
                 </div>
@@ -276,15 +379,95 @@ export default function UsuariosPage() {
           )}
         </CardContent>
       </Card>
+          {/* Dialog Editar Usuário */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Usuário</DialogTitle>
+            <DialogDescription>Atualize as informações do usuário.</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-nome">Nome *</Label>
+              <Input
+                id="edit-nome"
+                value={editFormData.nome}
+                onChange={(e) => setEditFormData({ ...editFormData, nome: e.target.value })}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-email">E-mail *</Label>
+              <Input
+                id="edit-email"
+                type="email"
+                value={editFormData.email}
+                onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-username">Usuário *</Label>
+              <Input
+                id="edit-username"
+                value={editFormData.username}
+                onChange={(e) => setEditFormData({ ...editFormData, username: e.target.value })}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-role">Perfil *</Label>
+              <Select
+                value={editFormData.role}
+                onValueChange={(value) => setEditFormData({ ...editFormData, role: value })}
+              >
+                <SelectTrigger id="edit-role">
+                  <SelectValue placeholder="Selecione um perfil" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="porteiro">Porteiro</SelectItem>
+                  <SelectItem value="cliente">Cliente</SelectItem>
+                  <SelectItem value="gestor">Gestor</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditDialog(false)}>
+              Cancelar
+            </Button>
+
+            <Button
+              onClick={() => {
+                if (!selectedUserId) return;
+                updateUserMutation.mutate({
+                  userId: selectedUserId,
+                  data: editFormData,
+                });
+              }}
+              disabled={updateUserMutation.isPending}
+            >
+              {updateUserMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Salvando...
+                </>
+              ) : (
+                "Salvar"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog Novo Usuário */}
       <Dialog open={showNewDialog} onOpenChange={setShowNewDialog}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Criar Novo Usuário</DialogTitle>
-            <DialogDescription>
-              Preencha os dados do novo usuário
-            </DialogDescription>
+            <DialogDescription>Preencha os dados do novo usuário</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
@@ -298,6 +481,7 @@ export default function UsuariosPage() {
                 required
               />
             </div>
+
             <div className="space-y-2">
               <Label htmlFor="email">E-mail *</Label>
               <Input
@@ -310,6 +494,7 @@ export default function UsuariosPage() {
                 required
               />
             </div>
+
             <div className="space-y-2">
               <Label htmlFor="username">Usuário *</Label>
               <Input
@@ -321,6 +506,7 @@ export default function UsuariosPage() {
                 required
               />
             </div>
+
             <div className="space-y-2">
               <Label htmlFor="password">Senha *</Label>
               <Input
@@ -333,14 +519,17 @@ export default function UsuariosPage() {
                 required
               />
             </div>
+
             <div className="space-y-2">
               <Label htmlFor="role">Perfil *</Label>
               <Select
                 value={formData.role}
-                onValueChange={(value) => setFormData({ ...formData, role: value as typeof formData.role })}
+                onValueChange={(value) =>
+                  setFormData({ ...formData, role: value as (typeof formData)["role"] })
+                }
               >
                 <SelectTrigger id="role" data-testid="select-role">
-                  <SelectValue />
+                  <SelectValue placeholder="Selecione um perfil" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="porteiro">Porteiro</SelectItem>
@@ -349,6 +538,7 @@ export default function UsuariosPage() {
                 </SelectContent>
               </Select>
             </div>
+
             <DialogFooter>
               <Button
                 type="button"
@@ -400,7 +590,10 @@ export default function UsuariosPage() {
                   </SelectTrigger>
                   <SelectContent>
                     {filiais
-                      ?.filter(f => !userPermissions?.some(p => p.filialId === f.id))
+                      ?.filter(
+                        (f) =>
+                          !userPermissions?.some((p) => p.filialId === f.id),
+                      )
                       ?.map((filial) => (
                         <SelectItem key={filial.id} value={filial.id}>
                           {filial.nome} ({filial.codigo})
@@ -409,7 +602,14 @@ export default function UsuariosPage() {
                   </SelectContent>
                 </Select>
                 <Button
-                  onClick={() => selectedUserId && selectedFilialId && addPermissionMutation.mutate({ userId: selectedUserId, filialId: selectedFilialId })}
+                  onClick={() =>
+                    selectedUserId &&
+                    selectedFilialId &&
+                    addPermissionMutation.mutate({
+                      userId: selectedUserId,
+                      filialId: selectedFilialId,
+                    })
+                  }
                   disabled={!selectedFilialId || addPermissionMutation.isPending}
                   data-testid="button-add-permission"
                 >
@@ -443,7 +643,9 @@ export default function UsuariosPage() {
                       <div className="flex items-center gap-2">
                         <Building2 className="h-4 w-4 text-muted-foreground" />
                         <div>
-                          <div className="font-medium">{permission.filial.nome}</div>
+                          <div className="font-medium">
+                            {permission.filial.nome}
+                          </div>
                           <div className="text-sm text-muted-foreground">
                             Código: {permission.filial.codigo}
                           </div>
@@ -452,7 +654,9 @@ export default function UsuariosPage() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => removePermissionMutation.mutate(permission.id)}
+                        onClick={() =>
+                          removePermissionMutation.mutate(permission.id)
+                        }
                         disabled={removePermissionMutation.isPending}
                         data-testid={`button-remove-permission-${permission.filial.codigo}`}
                       >
@@ -464,7 +668,9 @@ export default function UsuariosPage() {
               ) : (
                 <div className="text-center py-8 border rounded-lg">
                   <Building2 className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-                  <p className="text-muted-foreground">Nenhuma filial atribuída</p>
+                  <p className="text-muted-foreground">
+                    Nenhuma filial atribuída
+                  </p>
                 </div>
               )}
             </div>
@@ -484,6 +690,61 @@ export default function UsuariosPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Dialog Alterar Senha */}
+      <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Alterar Senha do Usuário</DialogTitle>
+            <DialogDescription>
+              Defina a nova senha para o usuário selecionado.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <Label htmlFor="nova-senha">Nova senha</Label>
+            <Input
+              id="nova-senha"
+              type="password"
+              placeholder="Digite a nova senha"
+              value={passwordInput}
+              onChange={(e) => setPasswordInput(e.target.value)}
+            />
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowPasswordDialog(false);
+                setPasswordInput("");
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => {
+                if (!selectedUserId || !passwordInput) return;
+                updatePasswordMutation.mutate({
+                  userId: selectedUserId,
+                  novaSenha: passwordInput,
+                });
+              }}
+              disabled={updatePasswordMutation.isPending}
+            >
+              {updatePasswordMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Salvando...
+                </>
+              ) : (
+                "Salvar"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
+

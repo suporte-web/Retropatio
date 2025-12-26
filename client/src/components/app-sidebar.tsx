@@ -1,17 +1,18 @@
-import { 
-  Building2, 
-  Users, 
-  Truck, 
-  UserCheck, 
-  Bell, 
-  FileText, 
-  Settings, 
+import {
+  Building2,
+  Users,
+  Truck,
+  UserCheck,
+  Bell,
+  FileText,
   LogOut,
   LayoutDashboard,
   Shield,
   MapPin,
-  PhoneCall
+  PhoneCall,
+  Monitor,
 } from "lucide-react";
+
 import {
   Sidebar,
   SidebarContent,
@@ -24,121 +25,90 @@ import {
   SidebarFooter,
   SidebarHeader,
 } from "@/components/ui/sidebar";
+
 import { useLocation } from "wouter";
-import { useAuth } from "@/hooks/use-auth";
+import { useAuth } from "@/contexts/AuthContext";
 import { RoleBadge } from "./role-badge";
-import { Badge } from "./ui/badge";
 
 export function AppSidebar() {
   const [location, setLocation] = useLocation();
-  const { user, logoutMutation } = useAuth();
+  const { user, logout } = useAuth();
+
+  const role = user?.role;
+  if (!role) return null;
 
   const handleLogout = () => {
-    logoutMutation.mutate();
+    logout();
+    setLocation("/auth");
   };
 
-  // Define menu items based on role
+  // ================================================
+  //  MENUS POR PERFIL (ROLE EM MAIÚSCULO)
+  // ================================================
   const getMenuItemsByRole = () => {
-    if (!user) return [];
-
     const baseItems = [
       {
         title: "Seleção de Filial",
-        url: "/filial",
+        url: "/filial-selection",
         icon: Building2,
-        roles: ["porteiro", "cliente", "gestor"],
+        roles: ["PORTEIRO", "CLIENTE", "GESTOR", "ADMIN"],
       },
     ];
 
-    const porteiroItems = [
-      {
-        title: "Portaria",
-        url: "/portaria",
-        icon: Truck,
-        roles: ["porteiro"],
-      },
-      {
+  const sharedItems = [
+  {
         title: "Mapa de Vagas",
         url: "/vagas",
         icon: MapPin,
-        roles: ["porteiro"],
-      },
-      {
-        title: "Visitantes",
-        url: "/visitantes",
-        icon: UserCheck,
-        roles: ["porteiro"],
-      },
-      {
-        title: "Chamadas",
-        url: "/chamadas",
-        icon: Bell,
-        roles: ["porteiro"],
-      },
+        roles: ["PORTEIRO", "CLIENTE", "GESTOR", "ADMIN"],
+          },
+    ];
+
+
+    const porteiroItems = [
+      { title: "Portaria", url: "/portaria", icon: Truck, roles: ["PORTEIRO"] },
+      
+      { title: "Visitantes", url: "/visitantes", icon: UserCheck, roles: ["PORTEIRO"] },
+      { title: "Chamadas", url: "/chamadas", icon: Bell, roles: ["PORTEIRO"] },
+      { title: "Fornecedores", url: "/fornecedores", icon: Users, roles: ["PORTEIRO"] },
+      { title: "Motoristas", url: "/motoristas", icon: Truck, roles: ["PORTEIRO"] },
+      { title: "Veículos", url: "/veiculos-cadastro", icon: Truck, roles: ["PORTEIRO"] },
+      { title: "Status Caminhão", url: "/status-caminhao", icon: FileText, roles: ["PORTEIRO"] },
+      { title: "TV Display", url: "/tv-display", icon: Monitor, roles: ["PORTEIRO"] },
     ];
 
     const clienteItems = [
-      {
-        title: "Dashboard",
-        url: "/cliente",
-        icon: LayoutDashboard,
-        roles: ["cliente"],
-      },
-      {
-        title: "Mapa de Vagas",
-        url: "/vagas",
-        icon: MapPin,
-        roles: ["cliente"],
-      },
-      {
-        title: "Chamadas",
-        url: "/cliente-chamadas",
-        icon: PhoneCall,
-        roles: ["cliente"],
-      },
-      {
-        title: "Relatórios",
-        url: "/relatorios",
-        icon: FileText,
-        roles: ["cliente"],
-      },
+      { title: "Dashboard", url: "/cliente", icon: LayoutDashboard, roles: ["CLIENTE"] },
+      
+      { title: "Chamadas", url: "/cliente-chamadas", icon: PhoneCall, roles: ["CLIENTE"] },
+      { title: "Relatórios", url: "/relatorios", icon: FileText, roles: ["CLIENTE"] },
     ];
 
     const gestorItems = [
-      {
-        title: "Gestão",
-        url: "/gestao",
-        icon: Shield,
-        roles: ["gestor"],
-      },
-      {
-        title: "Usuários",
-        url: "/usuarios",
-        icon: Users,
-        roles: ["gestor"],
-      },
-      {
-        title: "Filiais",
-        url: "/filiais",
-        icon: Building2,
-        roles: ["gestor"],
-      },
-      {
-        title: "Vagas",
-        url: "/vagas-admin",
-        icon: MapPin,
-        roles: ["gestor"],
-      },
-      {
-        title: "Auditoria",
-        url: "/auditoria",
-        icon: FileText,
-        roles: ["gestor"],
-      },
+      { title: "Gestão", url: "/gestao", icon: Shield, roles: ["GESTOR", "ADMIN"] },
+      { title: "Usuários", url: "/usuarios", icon: Users, roles: ["GESTOR", "ADMIN"] },
+      { title: "Filiais", url: "/filiais", icon: Building2, roles: ["GESTOR", "ADMIN"] },
+      { title: "Vagas Admin", url: "/vagas-admin", icon: MapPin, roles: ["GESTOR", "ADMIN"] },
+      { title: "Auditoria", url: "/auditoria", icon: FileText, roles: ["GESTOR", "ADMIN"] },
     ];
 
-    const allItems = [...baseItems, ...porteiroItems, ...clienteItems, ...gestorItems];
-    return allItems.filter(item => item.roles.includes(user.role));
+    const allItems = [
+  ...baseItems,
+  ...sharedItems,
+  ...porteiroItems,
+  ...clienteItems,
+  ...gestorItems,
+];
+
+
+    return allItems.filter(item => {
+  if (role === "ADMIN" || role === "GESTOR") {
+    return true; // 👈 vê tudo
+  }
+
+  return item.roles.includes(role);
+});
+
   };
 
   const menuItems = getMenuItemsByRole();
@@ -150,27 +120,23 @@ export function AppSidebar() {
           <div className="flex h-10 w-10 items-center justify-center rounded-md bg-sidebar-primary">
             <Truck className="h-6 w-6 text-sidebar-primary-foreground" />
           </div>
-          <div className="flex flex-col">
-            <span className="text-sm font-semibold text-sidebar-foreground">RETROPATIO</span>
-            <span className="text-xs text-sidebar-foreground/60">Controle de Pátio</span>
+          <div>
+            <span className="text-sm font-semibold">RETROPATIO</span>
+            <span className="text-xs opacity-70">Controle de Pátio</span>
           </div>
         </div>
       </SidebarHeader>
 
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel className="text-xs uppercase tracking-wide text-sidebar-foreground/60">
-            Menu
-          </SidebarGroupLabel>
+          <SidebarGroupLabel>Menu</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {menuItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
+              {menuItems.map(item => (
+                <SidebarMenuItem key={item.url}>
                   <SidebarMenuButton
                     onClick={() => setLocation(item.url)}
                     isActive={location === item.url}
-                    className="hover-elevate"
-                    data-testid={`nav-${item.url.substring(1)}`}
                   >
                     <item.icon className="h-4 w-4" />
                     <span>{item.title}</span>
@@ -183,30 +149,24 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border p-4">
-        {user && (
-          <div className="space-y-3">
-            <div className="flex flex-col gap-1 rounded-md bg-sidebar-accent p-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-sidebar-accent-foreground">{user.nome}</span>
-                <RoleBadge role={user.role} />
-              </div>
-              <span className="text-xs text-sidebar-accent-foreground/60">{user.email}</span>
+        <div className="space-y-3">
+          <div className="rounded-md p-3 bg-sidebar-accent">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">{user.nome}</span>
+              <RoleBadge role={role} />
             </div>
-            
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  onClick={handleLogout}
-                  className="w-full hover-elevate text-destructive"
-                  data-testid="button-logout"
-                >
-                  <LogOut className="h-4 w-4" />
-                  <span>Sair</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
+            <span className="text-xs opacity-70">{user.email}</span>
           </div>
-        )}
+
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton onClick={handleLogout} className="text-destructive">
+                <LogOut className="h-4 w-4" />
+                <span>Sair</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </div>
       </SidebarFooter>
     </Sidebar>
   );
