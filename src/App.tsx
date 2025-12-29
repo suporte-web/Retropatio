@@ -27,26 +27,26 @@ import { Loader2 } from "lucide-react";
 // =====================
 import AuthPage from "@/pages/login/auth-page";
 import FilialSelectionPage from "@/pages/filialSelection/filial-selection-page";
-import Unauthorized from "@/pages/Unauthorized";
-import NotFound from "@/pages/not-found";
+import Unauthorized from "@/pages/unauthorized/Unauthorized";
+import NotFound from "@/pages/notFound/not-found";
 
 import PortariaPage from "@/pages/portaria/portaria-page";
-import VagasPage from "@/pages/vagas-page";
-import VagasAdminPage from "@/pages/vagas-admin-page";
+import VagasPage from "@/pages/vagas/vagas-page";
+import VagasAdminPage from "@/pages/vagasAdmin/vagas-admin-page";
 import VisitantesPage from "@/pages/visitantes/visitantes-page";
 import ChamadasPage from "@/pages/chamadas/chamadas-page";
 
-import ClienteDashboardPage from "@/pages/cliente-dashboard-page";
-import ClienteChamadasPage from "@/pages/cliente-chamadas-page";
-import RelatoriosPage from "@/pages/relatorios-page";
+import ClienteDashboardPage from "@/pages/clienteDashboard/cliente-dashboard-page";
+import ClienteChamadasPage from "@/pages/clientesChamadas/cliente-chamadas-page";
+import RelatoriosPage from "@/pages/relatorios/relatorios-page";
 
-import GestaoPage from "@/pages/gestao-page";
-import UsuariosPage from "@/pages/usuarios-page";
-import FiliaisPage from "@/pages/filiais-page";
-import AuditoriaPage from "@/pages/auditoria-page";
+import GestaoPage from "@/pages/gestao/gestao-page";
+import UsuariosPage from "@/pages/usuarios/usuarios-page";
+import FiliaisPage from "@/pages/filiais/filiais-page";
+import AuditoriaPage from "@/pages/auditoria/auditoria-page";
 
 import MotoristasPage from "@/pages/motoristas/motoristas-page";
-import VeiculosCadastroPage from "@/pages/veiculos-cadastro-page";
+import VeiculosCadastroPage from "@/pages/veiculosCadastro/veiculos-cadastro-page";
 import FornecedoresPage from "@/pages/fornecedores/fornecedores-page";
 import StatusCaminhaoPage from "@/pages/statusCaminhao/status-caminhao-page";
 
