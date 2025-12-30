@@ -19,6 +19,12 @@ import { Badge } from "@/components/ui/badge";
 /* =====================================================
    TIPOS PARA A PORTARIA (AGORA BASEADO EM ENTRADA)
 ===================================================== */
+
+type Fornecedor = {
+  id: string;
+  nome: string;
+  cnpj: string;
+  };
 type EntradaAtiva = {
   id: number;
   filialId: string;
@@ -96,7 +102,7 @@ export default function PortariaPage() {
     tipoProprietario: "terceiro",
     statusCarga: "",
     tipoMotorista: "visitante",
-
+    fornecedorId: "", // UI - não salva no banco
     placaCavalo: "",
     placaCarreta: "",
     motorista: "",
@@ -191,6 +197,27 @@ export default function PortariaPage() {
     ? visitantesRaw
     : visitantesRaw?.data ?? [];
 
+/* =========================
+   FORNECEDORES (AUTOCOMPLETE)
+========================= */
+type Fornecedor = {
+  id: string;
+  nome: string;
+  cnpj: string;
+};
+
+const { data: fornecedoresRaw } = useQuery({
+  queryKey: ["fornecedores"],
+  queryFn: () =>
+    apiRequest("GET", "/api/fornecedores").then((res) => res.json()),
+});
+
+const fornecedores: Fornecedor[] = Array.isArray(fornecedoresRaw)
+  ? fornecedoresRaw
+  : fornecedoresRaw?.data ?? [];
+
+
+
   /* =========================
      MUTATION: REGISTRAR ENTRADA
      - agora POST /api/entrada
@@ -266,6 +293,7 @@ export default function PortariaPage() {
         nf: "",
         lacre: "",
         observacoes: "",
+        fornecedorId:"",
       });
     },
   });
@@ -596,6 +624,45 @@ export default function PortariaPage() {
                       </Select>
                     </div>
 
+                   {/* Fornecedor (AUTOCOMPLETE – não salva no banco) */}
+                    <div>
+                      <Label>Fornecedor</Label>
+
+                      <Select
+                        value={formData.fornecedorId}
+                        onValueChange={(value) => {
+                          const fornecedor = fornecedores.find((f) => f.id === value);
+
+                          setFormData({
+                            ...formData,
+                            fornecedorId: value,
+                            cliente: fornecedor?.nome || "",
+                            transportadora: fornecedor?.nome || "",
+                          });
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione o fornecedor" />
+                        </SelectTrigger>
+
+                        <SelectContent>
+                          {fornecedores.length ? (
+                            fornecedores.map((f) => (
+                              <SelectItem key={f.id} value={f.id}>
+                                {f.nome}
+                              </SelectItem>
+                            ))
+                          ) : (
+                            <SelectItem disabled value="0">
+                              Nenhum fornecedor cadastrado
+                            </SelectItem>
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    
+
                     <div>
                       <Label>Transportadora</Label>
                       <Input
@@ -698,6 +765,8 @@ export default function PortariaPage() {
                         nf: "",
                         lacre: "",
                         observacoes: "",
+                        fornecedorId: "",
+
                       })
                     }
                   >
